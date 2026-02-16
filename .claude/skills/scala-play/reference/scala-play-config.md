@@ -14,8 +14,7 @@ lazy val root = (project in file("."))
 
     // ── Dependencies ───────────────────────────────────────────
     libraryDependencies ++= Seq(
-      // Play (provided by the plugin; explicit version for clarity)
-      guice exclude("com.google.inject", "guice"),  // Remove if using compile-time DI
+      // No guice — compile-time DI only (see AppLoader)
       "org.typelevel"  %% "cats-core"                       % "2.12.0",
       "org.typelevel"  %% "cats-effect"                     % "3.5.4",
       "co.fs2"         %% "fs2-core"                        % "3.11.0",
@@ -31,8 +30,17 @@ lazy val root = (project in file("."))
     // Do NOT repeat them here — under -Xfatal-warnings, duplicates are fatal errors.
     scalacOptions ++= Seq(
       "-Xfatal-warnings",
-      "-Wunused:all",         // Flag unused imports / bindings
+      "-Wunused:imports",
+      "-Wunused:privates",
+      "-Wunused:locals",
+      // -Wunused:params intentionally omitted — context parameters like
+      // ExecutionContext are provided by default in controllers and will
+      // be flagged as unused before real work is added.
     ),
+
+    // Play's routes compiler generates code with unused imports.
+    // Suppress warnings from generated sources to avoid false positives.
+    scalacOptions += "-Wconf:src=routes/.*:s",
 
     // ── Disable Guice (compile-time DI only) ──────────────────
     // Remove the guice dep above and exclude Play's default app loader

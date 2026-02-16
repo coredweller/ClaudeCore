@@ -49,7 +49,8 @@ sbt dependencyTree         # Visualize transitive dependencies
 | In-memory impl | `Ref[IO, Map[K, V]]` |
 | Service | Returns `IO[Either[DomainError, A]]` |
 | Controller | `Action.async`, convert `IO → Future` at boundary |
-| IO → Future | `io.unsafeToFuture()(runtime)` with explicit `IORuntime` |
+| IO → Future | `io.unsafeToFuture()(runtime)` with explicit `IORuntime`; `ExecutionContext` for `Future` chains |
+| Routes wiring | `new Routes(errorHandler, ctrl1, ctrl2)` — arg order matches `conf/routes` declaration order |
 | Config | `application.conf` + `${ENV_VAR}` substitution |
 
 ## Reference Files

@@ -172,16 +172,15 @@ package controllers
 
 import cats.effect.IO
 import cats.effect.unsafe.IORuntime
-import domain.{Task, TaskId, TaskError}
+import domain.{TaskId, TaskError}
 import play.api.libs.json.*
 import play.api.mvc.*
 import services.TaskService
 
-import javax.inject.{Inject, Singleton}
 import scala.concurrent.{ExecutionContext, Future}
 
-// NOTE: constructor injection here works for both Guice AND compile-time DI.
 // With compile-time DI you instantiate this manually in AppComponents.
+// IORuntime is used by unsafeToFuture(); EC is used by Future.map/flatMap chains.
 final class TaskController(
   service: TaskService,
   cc:      ControllerComponents
@@ -282,9 +281,10 @@ class AppComponents(context: Context)
   private val taskController = TaskController(taskService, controllerComponents)
   private val healthController = HealthController(controllerComponents)
 
-  // Play's generated router from conf/routes
+  // IMPORTANT: Routes constructor argument order matches the order routes
+  // appear in conf/routes (first controller listed = first constructor arg).
   override def router: Router =
-    new Routes(httpErrorHandler, taskController, healthController)
+    new Routes(httpErrorHandler, healthController, taskController)
 
   override def httpFilters: Seq[EssentialFilter] = super.httpFilters
 ```
