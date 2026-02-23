@@ -19,7 +19,7 @@ MyApi/
 MyApi.Tests/
 ├── MyApi.Tests.csproj
 └── Services/
-    └── TaskServiceTests.cs
+    └── WorkItemServiceTests.cs
 Dockerfile
 docker-compose.yml
 ```
@@ -39,6 +39,18 @@ docker-compose.yml
     <WarningsAsErrors />
     <Deterministic>true</Deterministic>
     <RootNamespace>MyApi</RootNamespace>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!--
+      CA1848: LoggerMessage delegates are a micro-optimisation for high-throughput hot paths.
+              The extension-method API is intentionally used here for readability in this scaffold.
+      CA1000: Result<T>.Success/Failure are static factory methods on a generic type — an
+              established pattern that does not warrant a non-generic companion class here.
+      CA1305: Serilog's WriteTo.Console() does not accept IFormatProvider;
+              suppress the false-positive from the Roslyn analyser.
+    -->
+    <NoWarn>CA1848;CA1000;CA1305</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -67,6 +79,8 @@ docker-compose.yml
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
+    <!-- CA1707: xUnit uses Method_WhenX_ShouldY naming with underscores — suppress for tests only -->
+    <NoWarn>CA1707</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -95,7 +109,7 @@ docker-compose.yml
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <LangVersion>latest</LangVersion>
-    <AnalysisMode>All</AnalysisMode>
+    <AnalysisMode>Recommended</AnalysisMode>
   </PropertyGroup>
 </Project>
 ```
@@ -150,8 +164,8 @@ try
     builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 
     // ── Application services ───────────────────────────────────
-    builder.Services.AddScoped<ITaskRepository, DapperTaskRepository>();
-    builder.Services.AddScoped<ITaskService, TaskService>();
+    builder.Services.AddScoped<IWorkItemRepository, DapperWorkItemRepository>();
+    builder.Services.AddScoped<IWorkItemService, WorkItemService>();
 
     // ── Health checks ──────────────────────────────────────────
     builder.Services.AddHealthChecks();

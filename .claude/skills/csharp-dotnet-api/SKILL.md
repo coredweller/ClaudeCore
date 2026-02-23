@@ -15,7 +15,7 @@ allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 | DI | ASP.NET Core built-in container | Zero overhead, no third-party DI needed |
 | async | `async`/`await` throughout — no `.Result` or `.Wait()` | Avoids deadlocks, maximises thread-pool efficiency |
 | Domain IDs | `readonly record struct` wrapping `Guid` | Zero-cost, type-safe, no accidental ID confusion |
-| Domain errors | `sealed` class hierarchy with `switch` | Pattern-matchable, exhaustive, no magic strings |
+| Domain errors | `abstract record` + `sealed` subrecords with `switch` | Pattern-matchable, exhaustive, no magic strings |
 | Validation | FluentValidation + `[ApiController]` auto-400 | Declarative rules, separates validation from logic |
 | Logging | Serilog with structured sinks | JSON output, enrichers, compatible with ELK/Seq |
 | Testing | xUnit + NSubstitute + FluentAssertions | Fast, expressive, no boilerplate mocks |
@@ -48,8 +48,8 @@ dotnet ef migrations add <Name>                 # Add EF Core migration (if usin
 
 | Pattern | Implementation |
 |---------|---------------|
-| Domain IDs | `readonly record struct TaskId(Guid Value)` |
-| Domain errors | `sealed class TaskError` + subclasses, matched via `switch` |
+| Domain IDs | `readonly record struct WorkItemId(Guid Value)` |
+| Domain errors | `abstract record WorkItemError` + sealed subrecords, matched via `switch` |
 | Service return | `Task<Result<T>>` — never throws for domain errors |
 | Result mapping | Controller `switch` on `Result` → `Ok` / `NotFound` / `BadRequest` |
 | Async all the way | `async Task<IActionResult>` controller actions |
