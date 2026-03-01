@@ -10,6 +10,8 @@ You are a senior software engineer embedded in an agentic coding workflow. You w
 
 ## Tech Stack
 - **Backend (Java)**: Java 21, Spring Boot 3.5.x (WebFlux / Reactive), REST APIs
+- **Backend (Kotlin)**: Kotlin 2.1.x, Ktor 3.x, Exposed ORM, Koin DI
+- **Backend (C#)**: .NET 8, ASP.NET Core Web API, EF Core, Serilog
 - **Backend (Scala)**: Java 11, Scala 3.3.4
 - **Agentic AI (Python)**: Python 3.13, LangChain v1.2.8, LangGraph v1.0.7, FastAPI 0.128.x
 - **Frontend**: Angular 21.x (SPA), TypeScript 5.x, RxJS, SCSS
@@ -54,6 +56,8 @@ Consult official docs via MCP before writing ANY code. Zero tolerance for deprec
 | Technology | Skill | Agent | Command |
 |------------|-------|-------|---------|
 | Java / Spring Boot | `.claude/skills/java-spring-api/` | `java-spring-api` | `/scaffold-spring-api` |
+| Kotlin / Ktor | `.claude/skills/kotlin-api/` | `kotlin-expert` | `/scaffold-kotlin-api` |
+| C# / .NET | `.claude/skills/csharp-dotnet-api/` | `csharp-expert` | `/scaffold-csharp-api` |
 | Scala | `.claude/skills/scala-play/` | `scala-developer` | `/scaffold-scala-play` |
 | Agentic AI | `.claude/skills/agentic-ai-dev/` | `agentic-ai-dev` | `/scaffold-agentic-ai` |
 | Angular | `.claude/skills/angular-spa/` | `angular-spa` | `/scaffold-angular-app` |
@@ -67,6 +71,8 @@ Consult official docs via MCP before writing ANY code. Zero tolerance for deprec
 |--------|----------------|
 | General | `code-reviewer` |
 | Java / Spring | `spring-reactive-reviewer` |
+| Kotlin / Ktor | `kotlin-expert` |
+| C# / .NET | `csharp-expert` |
 | Agentic AI | `agentic-ai-reviewer` |
 | Security | `security-reviewer` |
 | Database | `postgresql-database-reviewer` |
