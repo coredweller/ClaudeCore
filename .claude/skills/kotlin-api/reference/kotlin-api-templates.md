@@ -91,13 +91,20 @@ fun Application.configureSerialization() {
 ```kotlin
 package com.company.myservice.config
 
+import com.company.myservice.feature.user.UserService
 import com.company.myservice.feature.user.userRoutes
 import io.ktor.server.application.Application
 import io.ktor.server.routing.routing
+import org.koin.ktor.ext.inject
 
+// IMPORTANT: inject services here at Application scope, NOT inside Route extensions.
+// koin-ktor 4.0.1 + Ktor 3.x has a known NoClassDefFoundError when calling inject()
+// inside a Route extension function (RoutingKt class not found at runtime).
 fun Application.configureRouting() {
+    val userService: UserService by inject()
+
     routing {
-        userRoutes()
+        userRoutes(userService)
         // add more route extensions here
     }
 }
@@ -275,7 +282,7 @@ fun User.toResponse() = UserResponse(
 package com.company.myservice.feature.user
 
 import org.jetbrains.exposed.sql.Table
-import org.jetbrains.exposed.sql.kotlin.datetime.timestamp
+import org.jetbrains.exposed.sql.javatime.timestamp   // exposed-java-time; yields java.time.Instant directly
 import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
@@ -343,8 +350,8 @@ class UserRepositoryImpl : UserRepository {
         email     = this[UsersTable.email],
         firstName = this[UsersTable.firstName],
         lastName  = this[UsersTable.lastName],
-        createdAt = this[UsersTable.createdAt].toJavaInstant(),
-        updatedAt = this[UsersTable.updatedAt].toJavaInstant(),
+        createdAt = this[UsersTable.createdAt],  // already java.time.Instant via exposed-java-time
+        updatedAt = this[UsersTable.updatedAt],
     )
 }
 ```
@@ -411,7 +418,6 @@ class UserService(private val repo: UserRepository) {
 ```kotlin
 package com.company.myservice.feature.user
 
-import arrow.core.getOrElse
 import com.company.myservice.common.DomainError
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
@@ -421,11 +427,11 @@ import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
-import org.koin.ktor.ext.inject
 
-fun Route.userRoutes() {
-    val service: UserService by inject()
-
+// Service is injected in Routing.kt (Application scope) and passed as a parameter.
+// Do NOT call inject() inside a Route extension — koin-ktor 4.0.1 + Ktor 3.x throws
+// NoClassDefFoundError: RoutingKt at runtime.
+fun Route.userRoutes(service: UserService) {
     route("/api/v1/users") {
         get {
             val users = service.findAll()

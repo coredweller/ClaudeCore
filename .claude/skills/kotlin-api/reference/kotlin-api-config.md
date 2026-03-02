@@ -3,6 +3,10 @@
 ## `settings.gradle.kts`
 
 ```kotlin
+plugins {
+    id("org.gradle.toolchains.foojay-resolver-convention") version "0.9.0"
+}
+
 rootProject.name = "my-service"
 ```
 
@@ -17,7 +21,8 @@ plugins {
     id("io.ktor.plugin") version "3.1.1"
     id("io.gitlab.arturbosch.detekt") version "1.23.7"
     id("org.jlleitschuh.gradle.ktlint") version "12.1.2"
-    id("com.github.johnrengelman.shadow") version "8.1.1"
+    // NOTE: do NOT add com.github.johnrengelman.shadow — Ktor 3.x plugin bundles ShadowJar;
+    // adding it separately causes a capability conflict.
 }
 
 group = "com.company"
@@ -68,7 +73,9 @@ dependencies {
     implementation("org.jetbrains.exposed:exposed-core:$exposedVersion")
     implementation("org.jetbrains.exposed:exposed-dao:$exposedVersion")
     implementation("org.jetbrains.exposed:exposed-jdbc:$exposedVersion")
-    implementation("org.jetbrains.exposed:exposed-kotlin-datetime:$exposedVersion")
+    implementation("org.jetbrains.exposed:exposed-java-time:$exposedVersion")
+    // NOTE: use exposed-java-time (not exposed-kotlin-datetime) — works directly with
+    // java.time.Instant without manual .toJavaInstant() conversion in domain models.
 
     // Database
     implementation("org.postgresql:postgresql:42.7.4")
@@ -86,12 +93,13 @@ dependencies {
     // Observability
     implementation("io.micrometer:micrometer-registry-prometheus:1.14.4")
     implementation("ch.qos.logback:logback-classic:1.5.13")
+    implementation("net.logstash.logback:logstash-logback-encoder:8.0")
 
     // Test
     testImplementation("io.ktor:ktor-server-test-host:$ktorVersion")
     testImplementation("io.kotest:kotest-runner-junit5:$kotestVersion")
     testImplementation("io.kotest:kotest-assertions-core:$kotestVersion")
-    testImplementation("io.kotest:kotest-assertions-arrow:2.0.0")
+    testImplementation("io.kotest.extensions:kotest-assertions-arrow:2.0.0")
     testImplementation("io.mockk:mockk:$mockkVersion")
     testImplementation("org.testcontainers:postgresql:1.20.4")
     testImplementation("io.insert-koin:koin-test:$koinVersion")
@@ -164,8 +172,6 @@ jwt {
   </root>
 </configuration>
 ```
-
-> Add `net.logstash.logback:logstash-logback-encoder:8.0` to dependencies for structured JSON logs in production.
 
 ## `detekt.yml` (minimal overrides)
 

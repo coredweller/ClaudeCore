@@ -47,14 +47,14 @@ Delegate to the `kotlin-api` skill for all patterns, templates, and reference fi
 
 12. **Create service layer** — `TaskService(private val repo: TaskRepository)` with all methods `suspend` returning `Either<DomainError, T>`. Validate with Konform first (return `Left(ValidationFailed(...))` on errors), check for conflicts, delegate to repo, log on success with SLF4J. No `HttpStatusCode` references anywhere in the service. Read `reference/kotlin-api-templates.md` for the pattern.
 
-13. **Create routes** — `fun Route.taskRoutes()` extension in `feature/task/TaskRoutes.kt`. Mount at `/api/v1/tasks` with:
+13. **Create routes** — `fun Route.taskRoutes(service: TaskService)` extension in `feature/task/TaskRoutes.kt`. Mount at `/api/v1/tasks` with:
     - `GET /` → `service.findAll()`, respond 200 with list
     - `GET /{id}` → `service.findById(id)`, fold: throw error (caught by StatusPages) or respond 200
     - `POST /` → `call.receive<CreateTaskRequest>()`, `service.create(request)`, fold: throw or respond 201
     - `DELETE /{id}` → `service.delete(id)`, fold: throw or respond 204
-    Use `by inject<TaskService>()` for DI. Read `reference/kotlin-api-templates.md` for the exact route pattern.
+    **IMPORTANT:** Do NOT call `by inject()` inside the `Route` extension — `koin-ktor` 4.0.1 throws `NoClassDefFoundError: RoutingKt` at runtime with Ktor 3.x. The service must be a parameter. Read `reference/kotlin-api-templates.md` for the exact pattern.
 
-14. **Register routes** — Update `config/Routing.kt` to call `taskRoutes()` and `healthRoutes()` inside `routing { }`.
+14. **Register routes** — Update `config/Routing.kt`: inject `TaskService` via `val taskService: TaskService by inject()` at `Application` scope (before `routing { }`), then call `taskRoutes(taskService)` and `healthRoutes()` inside `routing { }`.
 
 15. **Create health endpoint** — `fun Route.healthRoutes()` at `GET /api/v1/health` responding `200 OK` with `{"status":"ok","timestamp":"<ISO-8601>"}`.
 
