@@ -1,7 +1,7 @@
 ---
 name: java-coding-standard
 description: This skill should be activated when reviewing Java code or enforcing coding standards in Spring Boot services. It covers naming conventions, immutability patterns, Optional usage, streams, and exception handling.
-allowed-tools: Read
+allowed-tools: Bash, Read, Glob, Grep
 ---
 
 # Java Coding Standards

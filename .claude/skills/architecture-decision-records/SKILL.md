@@ -1,7 +1,7 @@
 ---
 name: architecture-decision-records
 description: This skill should be used when documenting significant technical decisions, reviewing past architectural choices, or establishing decision processes. It provides ADR templates and best practices.
-allowed-tools: Read
+allowed-tools: Bash, Read, Glob, Grep
 ---
 
 # Architecture Decision Records

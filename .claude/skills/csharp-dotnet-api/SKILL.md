@@ -1,7 +1,7 @@
 ---
 name: csharp-dotnet-api
 description: Skill for C# .NET 8 Web API applications with ASP.NET Core, strongly-typed domain IDs, Result pattern, and clean layered architecture. Activate when creating controllers, services, repositories, domain models, or tests.
-allowed-tools: Bash, Read, Write, Edit, Glob, Grep
+allowed-tools: Bash, Read, Glob, Grep
 ---
 
 # C# .NET 8 Web API Skill

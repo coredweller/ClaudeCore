@@ -1,6 +1,7 @@
 ---
 name: plan-mode-review
 description: Structured plan review with Phase 0 self-review, 5-phase code review (Architecture, Code Quality, Tests, Performance, Production Readiness), approval scope triage, decision logging, and blast radius assessment. Use when reviewing plans, PRs, or preparing non-trivial changes for implementation.
+allowed-tools: Bash, Read, Glob, Grep
 ---
 
 # Plan Mode Review

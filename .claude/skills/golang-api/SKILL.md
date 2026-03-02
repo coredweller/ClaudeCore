@@ -1,7 +1,7 @@
 ---
 name: golang-api
 description: Skill for Go 1.23+ REST API development with chi router, pgx/v5, golang-migrate, slog, and testify. Activate when creating HTTP handlers, services, repositories, domain models, or tests in Go.
-allowed-tools: Bash, Read, Write, Edit, Glob, Grep
+allowed-tools: Bash, Read, Glob, Grep
 ---
 
 # Go 1.23+ REST API Skill

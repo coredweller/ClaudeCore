@@ -1,7 +1,7 @@
 ---
 name: java-spring-api
 description: This skill provides patterns and templates for Java 21 Spring Boot 3.5.x WebFlux REST API development. It should be activated when creating controllers, services, repositories, DTOs, or reactive tests.
-allowed-tools: Bash, Read, Write, Edit
+allowed-tools: Bash, Read, Glob, Grep
 ---
 
 # Java 21 + Spring Boot 3.5.x WebFlux REST API Skill

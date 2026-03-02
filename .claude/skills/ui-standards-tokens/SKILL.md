@@ -1,7 +1,7 @@
 ---
 name: ui-standards-tokens
 description: "This skill provides design token definitions, theming patterns, and UI standards for Flutter applications. Use when auditing UI compliance, implementing design systems, or ensuring consistent token usage."
-allowed-tools: Read
+allowed-tools: Bash, Read, Glob, Grep
 ---
 
 # UI Standards - Design Tokens & Patterns

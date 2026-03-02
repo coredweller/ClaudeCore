@@ -1,7 +1,7 @@
 ---
 name: scala-play
 description: Skill for Scala 3 Play Framework applications with Cats Effect IO, compile-time DI, and functional domain modeling. Activate when creating Play controllers, services, repositories, domain models, or tests.
-allowed-tools: Bash, Read, Write, Edit, Glob, Grep
+allowed-tools: Bash, Read, Glob, Grep
 ---
 
 # Scala 3 + Play Framework Skill

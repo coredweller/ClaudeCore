@@ -1,7 +1,7 @@
 ---
 name: mcp-builder
 description: This skill should be used when building MCP (Model Context Protocol) servers to integrate external APIs or services. It provides guides for Python (FastMCP) and Node/TypeScript (MCP SDK) implementations.
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, WebFetch, WebSearch
+allowed-tools: Bash, Read, Glob, Grep
 ---
 
 # MCP Server Development Guide

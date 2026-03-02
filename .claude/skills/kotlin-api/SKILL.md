@@ -1,7 +1,7 @@
 ---
 name: kotlin-api
 description: Skill for Kotlin 2.x + Ktor 3.x REST API development with Exposed ORM, Koin DI, coroutines, and Kotest. Activate when creating Ktor routes, services, repositories, domain models, or tests.
-allowed-tools: Bash, Read, Write, Edit, Glob, Grep
+allowed-tools: Bash, Read, Glob, Grep
 ---
 
 # Kotlin 2.x + Ktor 3.x REST API Skill
@@ -48,7 +48,7 @@ allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 | Errors | Sealed class hierarchy `DomainError` |
 | Repository | Interface with `suspend` methods; Exposed impl |
 | Service | `suspend fun` returning `Either<DomainError, T>` (Arrow) |
-| Route | `Route.userRoutes()` extension function, mounted in `Application.kt` |
+| Route | `Route.userRoutes(service)` extension — service injected in `Routing.kt` at `Application` scope, passed as param (koin-ktor 4.0.1 throws `NoClassDefFoundError` when `inject()` is called inside a `Route` extension) |
 | Request DTO | `@Serializable data class` with Konform validation |
 | Response DTO | `@Serializable data class` — never expose domain/entity directly |
 | Error response | Ktor `StatusPages` plugin → RFC 9457 `ProblemDetail` JSON |

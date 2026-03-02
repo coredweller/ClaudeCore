@@ -1,7 +1,7 @@
 ---
 name: angular-spa
 description: "Angular 21.x SPA development skill with TailwindCSS 4.x and daisyUI 5.5.5. Use when building Angular standalone components, services, lazy-loaded routes, unit tests, or creating UI with TailwindCSS + daisyUI. Covers component scaffolding, UI/UX design, accessibility audits, and design systems."
-allowed-tools: Read, Edit, Write, Glob, Grep, Bash, WebFetch, mcp__context7__resolve-library-id, mcp__context7__query-docs
+allowed-tools: Bash, Read, Glob, Grep
 ---
 
 # Angular 21.x SPA Development Skill

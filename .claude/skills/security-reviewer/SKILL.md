@@ -1,7 +1,7 @@
 ---
 name: security-reviewer
 description: Security vulnerability detection and remediation skill. Provides OWASP Top 10 checklists, secret scanning patterns, and security review methodology.
-allowed-tools: Read, Bash, Grep, Glob
+allowed-tools: Bash, Read, Glob, Grep
 ---
 
 # Security Review Skill

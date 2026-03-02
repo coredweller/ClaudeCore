@@ -1,7 +1,7 @@
 ---
 name: playwright-skill
 description: This skill should be used for browser automation tasks including website testing, UX validation, responsive design checks, or any Playwright-based automation.
-allowed-tools: Bash, Read
+allowed-tools: Bash, Read, Glob, Grep
 ---
 
 # Playwright Browser Automation

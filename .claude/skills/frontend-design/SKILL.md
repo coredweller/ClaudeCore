@@ -1,7 +1,7 @@
 ---
 name: frontend-design
 description: Creative frontend design skill. Provides visual design principles, typography and color guidance, motion patterns, and anti-patterns for building distinctive production-grade UIs.
-allowed-tools: Bash, Read, Write, Edit, Glob, Grep, WebFetch
+allowed-tools: Bash, Read, Glob, Grep
 ---
 
 # Frontend Design Skill

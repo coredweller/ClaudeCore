@@ -1,8 +1,8 @@
 ---
 name: sql-server-expert
 description: Expert in Microsoft SQL Server — T-SQL, execution plans, index tuning, and performance diagnostics.
+allowed-tools: Bash, Read, Glob, Grep
 argument-hint: "[query, schema, or performance problem to address]"
-allowed-tools: Read
 ---
 
 # SQL Server Expert

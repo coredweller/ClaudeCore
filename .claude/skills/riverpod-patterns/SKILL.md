@@ -1,7 +1,7 @@
 ---
 name: riverpod-patterns
 description: "This skill provides Riverpod state management patterns and best practices for Flutter applications. Use when reviewing or writing Riverpod providers, AsyncValue handling, ref usage, or provider lifecycle management."
-allowed-tools: Read
+allowed-tools: Bash, Read, Glob, Grep
 ---
 
 # Riverpod Patterns
