@@ -224,7 +224,15 @@ export function workItemsPlugin(service: IWorkItemService): FastifyPluginAsyncZo
     // DELETE /workitems/:id
     app.delete(
       '/workitems/:id',
-      { schema: { params: WorkItemIdParamSchema } },
+      {
+        schema: {
+          params: WorkItemIdParamSchema,
+          response: {
+            204: z.undefined(),
+            404: z.object({ type: z.string(), title: z.string(), status: z.number(), instance: z.string() }),
+          },
+        },
+      },
       async (request, reply) => {
         const result = await service.delete(workItemIdFrom(request.params.id));
 

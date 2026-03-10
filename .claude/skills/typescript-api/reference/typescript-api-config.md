@@ -225,6 +225,7 @@ import {
   serializerCompiler,
   validatorCompiler,
 } from '@fastify/type-provider-zod';
+import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { config } from './config.js';
 import { db } from './db.js';
 import { DrizzleWorkItemRepository } from './repositories/work-item.repository.js';
@@ -238,6 +239,12 @@ interface AppDeps {
 }
 
 export async function buildApp(deps: AppDeps = {}) {
+  // Run pending migrations before accepting traffic.
+  // drizzle-orm/migrator reads the SQL files directly — drizzle-kit is not required at runtime.
+  if (config.NODE_ENV !== 'test') {
+    await migrate(db, { migrationsFolder: './migrations' });
+  }
+
   const app = Fastify({
     logger: {
       level: config.LOG_LEVEL,

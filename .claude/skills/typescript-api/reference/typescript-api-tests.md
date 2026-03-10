@@ -8,6 +8,7 @@ Unit tests (service logic, no I/O) and integration tests (full HTTP pipeline via
 
 ```typescript
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Logger } from 'pino';
 import type { WorkItem } from '../../src/domain/work-item.js';
 import { newWorkItemId, workItemIdFrom } from '../../src/domain/work-item.js';
 import type { IWorkItemRepository } from '../../src/repositories/work-item.repository.interface.js';
@@ -29,7 +30,7 @@ const noopLog = {
   info: vi.fn(),
   warn: vi.fn(),
   error: vi.fn(),
-} as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+} as unknown as Logger;
 
 // ── listAll ──────────────────────────────────────────────────────────────────
 describe('WorkItemService.listAll', () => {

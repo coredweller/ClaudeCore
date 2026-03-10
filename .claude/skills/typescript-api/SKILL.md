@@ -26,10 +26,10 @@ allowed-tools: Bash, Read, Glob, Grep
 2. Read `reference/typescript-api-domain.md` — domain model, errors, repository interface, service interface
 3. Read `reference/typescript-api-implementation.md` — Drizzle repository, service, route plugin
 4. Read `reference/typescript-api-tests.md` — unit tests, integration tests
-3. Define Zod schemas **first** — they derive both runtime validation and static types
-4. Register plugins and routes in `main.ts` before implementing business logic
-5. Return `Result<T, AppError>` from services; map to HTTP responses in route handlers only — never throw for domain errors
-6. Run `npm run typecheck && npm test` before finishing
+5. Define Zod schemas **first** — they derive both runtime validation and static types
+6. Register plugins and routes in `main.ts` before implementing business logic
+7. Return `Result<T, AppError>` from services; map to HTTP responses in route handlers only — never throw for domain errors
+8. Run `npm run typecheck && npm test` before finishing
 
 
 ## Common Commands
@@ -59,7 +59,6 @@ npm run db:studio    # Drizzle Studio (visual DB browser)
 | Config | `z.object({...}).parse(process.env)` — validated at startup, exported as typed `config` |
 | Logging | `request.log.info({ workItemId }, 'message')` — structured, never string interpolation |
 | Error handler | Fastify `setErrorHandler` maps `AppError` to RFC 7807 `application/problem+json` |
-| AbortSignal | `request.signal` threaded through to DB and external calls for cancellation |
 
 ## Reference Files
 
@@ -89,4 +88,3 @@ Before generating code, verify against current docs:
 - **Validation failures**: Zod `.safeParse()` at route boundary → 400 before service is called
 - **Never** catch and swallow: every `catch` must log and rethrow or return a failure result
 - **Never** use exceptions for domain flow control (e.g. `throw new NotFoundError(...)` from service)
-- Thread `request.signal` (AbortSignal) through every async DB and external call
