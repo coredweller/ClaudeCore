@@ -24,8 +24,10 @@ allowed-tools: Bash, Read, Glob, Grep
 ## Process
 
 1. Read `reference/csharp-dotnet-config.md` — exact `.csproj`, `Program.cs`, `appsettings.json`, `Dockerfile`
-2. Read `reference/csharp-dotnet-templates.md` — Domain, Repository, Service, Controller, Middleware, Test templates
-3. Scaffold DI registration in `Program.cs` **first** — every other layer depends on it compiling
+2. Read `reference/csharp-dotnet-domain.md` — domain model, errors, Result type, repository interface, service interface
+3. Read `reference/csharp-dotnet-implementation.md` — Dapper repository, service, controller, validator, exception middleware
+4. Read `reference/csharp-dotnet-tests.md` — unit tests (service), integration tests (controller via WebApplicationFactory)
+5. Scaffold DI registration in `Program.cs` **first** — every other layer depends on it compiling
 4. Use `async`/`await` for ALL I/O; never block with `.Result`, `.Wait()`, or `Task.Run()` to sync
 5. Return `Result<T>` from services; map to HTTP responses in controllers only — never throw for domain errors
 6. Run `dotnet build --warnaserror && dotnet test` before finishing
@@ -64,7 +66,9 @@ dotnet ef migrations add <Name>                 # Add EF Core migration (if usin
 | File | Content |
 |------|---------|
 | `reference/csharp-dotnet-config.md` | `.csproj`, `Program.cs`, `appsettings.json`, `Dockerfile`, `docker-compose.yml` |
-| `reference/csharp-dotnet-templates.md` | Domain, Repository, Service, Controller, Middleware, Validator, Test templates |
+| `reference/csharp-dotnet-domain.md` | Domain model, domain errors, Result type, repository interface, service interface |
+| `reference/csharp-dotnet-implementation.md` | Dapper repository, service implementation, controller, validator, exception middleware |
+| `reference/csharp-dotnet-tests.md` | Unit tests (service), integration tests (controller via `WebApplicationFactory`) |
 
 ## Documentation Sources
 
