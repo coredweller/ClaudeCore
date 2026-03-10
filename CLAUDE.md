@@ -13,6 +13,7 @@ You are a senior software engineer embedded in an agentic coding workflow. You w
 - **Backend (Kotlin)**: Kotlin 2.1.x, Ktor 3.x, Exposed ORM, Koin DI
 - **Backend (C#)**: .NET 8, ASP.NET Core Web API, EF Core, Serilog
 - **Backend (Go)**: Go 1.23+, chi v5, pgx/v5, golang-migrate, slog
+- **Backend (TypeScript/Node)**: Node.js 24, Fastify v5, Drizzle ORM, Zod, Vitest
 - **Backend (Scala)**: Java 11, Scala 3.3.4
 - **Agentic AI (Python)**: Python 3.13, LangChain v1.2.8, LangGraph v1.0.7, FastAPI 0.128.x
 - **Frontend**: Angular 21.x (SPA), TypeScript 5.x, RxJS, SCSS
@@ -60,6 +61,7 @@ Consult official docs via MCP before writing ANY code. Zero tolerance for deprec
 | Kotlin / Ktor | `.claude/skills/kotlin-api/` | `kotlin-expert` | `/scaffold-kotlin-api` |
 | C# / .NET | `.claude/skills/csharp-dotnet-api/` | `csharp-expert` | `/scaffold-csharp-api` |
 | Go | `.claude/skills/golang-api/` | `golang-developer` | `/scaffold-golang-api` |
+| TypeScript / Node | `.claude/skills/typescript-api/` | `typescript-expert` | `/scaffold-typescript-api` |
 | Scala | `.claude/skills/scala-play/` | `scala-developer` | `/scaffold-scala-play` |
 | Agentic AI | `.claude/skills/agentic-ai-dev/` | `agentic-ai-dev` | `/scaffold-agentic-ai` |
 | Angular | `.claude/skills/angular-spa/` | `angular-spa` | `/scaffold-angular-app` |
