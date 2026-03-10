@@ -96,23 +96,11 @@ export function ok<T>(value: T): Result<T, never> {
 export function fail<E extends AppError>(error: E): Result<never, E> {
   return { ok: false, error };
 }
-
-// Map AppError to an HTTP status code
-export function statusFor(error: AppError): number {
-  switch (error.kind) {
-    case 'NotFound':
-      return 404;
-    case 'ValidationError':
-      return 400;
-    case 'Conflict':
-      return 409;
-  }
-}
 ```
 
 > `Result<T>` replaces exceptions for domain errors. Services return `Promise<Result<T>>` —
-> callers handle both outcomes explicitly. `statusFor()` lives here (not in routes) because
-> the HTTP mapping is derived from domain semantics, not from the HTTP layer.
+> callers handle both outcomes explicitly. HTTP status mapping lives in the route plugin,
+> not here — the domain has no knowledge of HTTP.
 
 ---
 

@@ -139,9 +139,18 @@ export class WorkItemService implements IWorkItemService {
 ```typescript
 import type { FastifyPluginAsyncZod } from '@fastify/type-provider-zod';
 import { z } from 'zod';
-import { statusFor } from '../domain/errors.js';
+import type { AppError } from '../domain/errors.js';
 import { workItemIdFrom } from '../domain/work-item.js';
 import type { IWorkItemService } from '../services/work-item.service.interface.js';
+
+// ── HTTP translation — maps domain errors to status codes (HTTP concern, not domain) ──
+function statusFor(error: AppError): number {
+  switch (error.kind) {
+    case 'NotFound':      return 404;
+    case 'ValidationError': return 400;
+    case 'Conflict':      return 409;
+  }
+}
 
 // ── Zod schemas — single source of truth for validation AND serialization ────
 const WorkItemSchema = z.object({
@@ -156,6 +165,13 @@ const CreateWorkItemSchema = z.object({
 
 const WorkItemIdParamSchema = z.object({
   id: z.string().uuid('Invalid work item ID format'),
+});
+
+const ProblemDetailsSchema = z.object({
+  type: z.string(),
+  title: z.string(),
+  status: z.number(),
+  instance: z.string(),
 });
 
 // ── Factory — injects service dependency, returns a Fastify plugin ───────────
@@ -176,7 +192,7 @@ export function workItemsPlugin(service: IWorkItemService): FastifyPluginAsyncZo
           params: WorkItemIdParamSchema,
           response: {
             200: WorkItemSchema,
-            404: z.object({ type: z.string(), title: z.string(), status: z.number(), instance: z.string() }),
+            404: ProblemDetailsSchema,
           },
         },
       },
@@ -229,7 +245,7 @@ export function workItemsPlugin(service: IWorkItemService): FastifyPluginAsyncZo
           params: WorkItemIdParamSchema,
           response: {
             204: z.undefined(),
-            404: z.object({ type: z.string(), title: z.string(), status: z.number(), instance: z.string() }),
+            404: ProblemDetailsSchema,
           },
         },
       },

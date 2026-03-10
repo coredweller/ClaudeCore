@@ -281,7 +281,10 @@ export async function buildApp(deps: AppDeps = {}) {
   await app.register(workItemsPlugin(service), { prefix: '/api/v1' });
 
   // ── Health check ───────────────────────────────────────────────────────────
-  app.get('/api/v1/health', async () => ({ status: 'ok' }));
+  // Registered under the same prefix so a single change keeps all routes consistent.
+  await app.register(async (api) => {
+    api.get('/health', async () => ({ status: 'ok' }));
+  }, { prefix: '/api/v1' });
 
   return app;
 }
