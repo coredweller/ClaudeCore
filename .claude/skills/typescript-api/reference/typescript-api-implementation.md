@@ -137,7 +137,7 @@ export class WorkItemService implements IWorkItemService {
 ## Route Plugin — `src/routes/work-items.ts`
 
 ```typescript
-import type { FastifyPluginAsyncZod } from '@fastify/type-provider-zod';
+import type { FastifyPluginCallbackZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import type { AppError } from '../domain/errors.js';
 import { workItemIdFrom } from '../domain/work-item.js';
@@ -175,8 +175,10 @@ const ProblemDetailsSchema = z.object({
 });
 
 // ── Factory — injects service dependency, returns a Fastify plugin ───────────
-export function workItemsPlugin(service: IWorkItemService): FastifyPluginAsyncZod {
-  return async function (app) {
+// Uses FastifyPluginCallbackZod (sync) because registration only calls app.get/post/delete —
+// no awaiting during setup. Using async here triggers @typescript-eslint/require-await.
+export function workItemsPlugin(service: IWorkItemService): FastifyPluginCallbackZod {
+  return function (app, _opts, done) {
     // GET /workitems
     app.get(
       '/workitems',
@@ -264,6 +266,8 @@ export function workItemsPlugin(service: IWorkItemService): FastifyPluginAsyncZo
         return reply.status(204).send();
       },
     );
+
+    done();
   };
 }
 ```
@@ -271,4 +275,6 @@ export function workItemsPlugin(service: IWorkItemService): FastifyPluginAsyncZo
 > Route handlers only map `Result<T>` to HTTP. Business rules live in the service.
 > Zod schemas drive both request validation and response serialization — no duplication.
 > `workItemsPlugin(service)` is a factory: it captures the service in a closure and
-> returns a `FastifyPluginAsyncZod` — registered in `main.ts` via `app.register()`.
+> returns a `FastifyPluginCallbackZod` — registered in `main.ts` via `app.register()`.
+> The callback pattern (`done()`) is used instead of `async` because route registration
+> is synchronous; `async` with no `await` triggers `@typescript-eslint/require-await`.

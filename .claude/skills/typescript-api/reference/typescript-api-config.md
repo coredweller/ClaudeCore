@@ -65,7 +65,7 @@ docker-compose.yml
   },
   "dependencies": {
     "@fastify/sensible": "^6.0.2",
-    "@fastify/type-provider-zod": "^4.0.2",
+    "fastify-type-provider-zod": "^4.0.2",
     "drizzle-orm": "^0.44.0",
     "fastify": "^5.2.0",
     "pino": "^9.0.0",
@@ -143,10 +143,8 @@ docker-compose.yml
 
 > Extends the build tsconfig but widens `rootDir` to `.` so `test/` files are in scope.
 > `noEmit: true` overrides the build config — this file is **never** used to produce output.
->
-> ESLint's `projectService: true` automatically selects `tsconfig.test.json` for files
-> in `test/`, giving type-aware rules (`no-floating-promises`, `consistent-type-imports`)
-> full type information in tests without a separate ESLint config block.
+> ESLint's `projectService` uses `allowDefaultProject` + `defaultProject: 'tsconfig.test.json'`
+> to type-check test files — see `eslint.config.js` template for the required configuration.
 
 ---
 
@@ -224,7 +222,7 @@ import sensible from '@fastify/sensible';
 import {
   serializerCompiler,
   validatorCompiler,
-} from '@fastify/type-provider-zod';
+} from 'fastify-type-provider-zod';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { config } from './config.js';
 import { db } from './db.js';
@@ -282,8 +280,11 @@ export async function buildApp(deps: AppDeps = {}) {
 
   // ── Health check ───────────────────────────────────────────────────────────
   // Registered under the same prefix so a single change keeps all routes consistent.
-  await app.register(async (api) => {
-    api.get('/health', async () => ({ status: 'ok' }));
+  // Callback pattern (not async) — no awaiting during registration, so async would
+  // trigger @typescript-eslint/require-await. done() signals Fastify plugin is complete.
+  await app.register((api, _opts, done) => {
+    api.get('/health', () => ({ status: 'ok' }));
+    done();
   }, { prefix: '/api/v1' });
 
   return app;
@@ -369,7 +370,13 @@ export default tseslint.config(
     ],
     languageOptions: {
       parserOptions: {
-        projectService: true,
+        projectService: {
+          // `tsconfig.test.json` is not named `tsconfig.json`, so TypeScript's project
+          // service won't find it by directory traversal. `allowDefaultProject` covers
+          // test files that fall through, and `defaultProject` points to the test config.
+          allowDefaultProject: ['*.js', 'test/*/*.ts'],
+          defaultProject: 'tsconfig.test.json',
+        },
         tsconfigRootDir: import.meta.dirname,
       },
     },
@@ -384,6 +391,14 @@ export default tseslint.config(
       '@typescript-eslint/no-floating-promises': 'error',
     },
   },
+  // In test files vi.fn() mocks have no real `this` binding — unbound-method is a false positive.
+  // @vitest/eslint-plugin would handle this automatically; we replicate its behaviour here.
+  {
+    files: ['test/**/*.ts'],
+    rules: {
+      '@typescript-eslint/unbound-method': 'off',
+    },
+  },
   // Always ignore compiled output and deps
   {
     ignores: ['dist/**', 'node_modules/**'],
@@ -395,7 +410,11 @@ export default tseslint.config(
 > `typescript-eslint` is the unified v8 package that replaces the separate
 > `@typescript-eslint/parser` + `@typescript-eslint/eslint-plugin` pair.
 > `recommendedTypeChecked` enables rules that require type information (e.g. `no-floating-promises`) —
-> this requires `parserOptions.projectService: true` to work.
+> this requires `parserOptions.projectService` to work. `projectService: true` is NOT sufficient
+> here — `tsconfig.test.json` has a non-standard name so the service won't find it by traversal;
+> `allowDefaultProject` + `defaultProject` are required.
+> `allowDefaultProject` must NOT use `**` (banned for performance); use `test/*/*.ts` to cover
+> the standard `test/unit/` and `test/integration/` layout.
 
 ---
 

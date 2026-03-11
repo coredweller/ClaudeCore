@@ -30,7 +30,7 @@ Delegate to the `typescript-api` skill for all patterns, templates, and referenc
 
 2. **Install dependencies** — Install production deps:
    ```bash
-   npm install fastify @fastify/sensible @fastify/type-provider-zod zod drizzle-orm postgres pino
+   npm install fastify @fastify/sensible fastify-type-provider-zod zod drizzle-orm postgres pino
    ```
    Install dev deps:
    ```bash
@@ -47,13 +47,21 @@ Delegate to the `typescript-api` skill for all patterns, templates, and referenc
        NODE_ENV: 'test',
        DATABASE_URL: 'postgres://test:test@localhost:5432/test_db',
        PORT: '3000',
-       LOG_LEVEL: 'silent',
+       LOG_LEVEL: 'error',
      },
    }
    ```
    Read `reference/typescript-api-config.md` for the full template.
 
-5. **Create ESLint configuration** — Create `eslint.config.js` using ESLint 9 flat config with `typescript-eslint`. Enable `recommendedTypeChecked`, `projectService: true`, and rules: `consistent-type-imports`, `no-explicit-any: error`, `no-unused-vars`, `no-floating-promises`. Read `reference/typescript-api-config.md` for the exact template.
+5. **Create ESLint configuration** — Create `eslint.config.js` using ESLint 9 flat config with `typescript-eslint`. Enable `recommendedTypeChecked` and rules: `consistent-type-imports`, `no-explicit-any: error`, `no-unused-vars`, `no-floating-promises`. IMPORTANT — do NOT use `projectService: true`; use the object form with `allowDefaultProject` and `defaultProject` so ESLint can find test files (see note below):
+   ```javascript
+   projectService: {
+     allowDefaultProject: ['*.js', 'test/*/*.ts'],
+     defaultProject: 'tsconfig.test.json',
+   }
+   ```
+   Also add a test-files override block that disables `unbound-method` — `vi.fn()` mocks have no real `this` binding, so the rule is a false positive in tests. Read `reference/typescript-api-config.md` for the exact template.
+   > **Why not `projectService: true`?** `tsconfig.test.json` is not named `tsconfig.json` so TypeScript's project service won't find it by directory traversal. `allowDefaultProject` covers test files that fall through. `allowDefaultProject` must NOT use `**` (banned for performance); `test/*/*.ts` covers the standard `test/unit/` + `test/integration/` layout.
 
 6. **Configure Claude** — Add all items from `.claude` in this repository to the new repository's `.claude` folder that are related to TypeScript/Node or general cross-cutting concerns like `code-standards.md`, `core-behaviors.md`, `verification-and-reporting.md`, and `code-reviewer`.
 
@@ -89,9 +97,9 @@ Delegate to the `typescript-api` skill for all patterns, templates, and referenc
 
 17. **Create `src/services/work-item.service.ts`** — `WorkItemService` implementing the interface. Return `Result<T>` — never throw for domain errors. Log at `warn` for expected failures, `info` for mutations, `debug` for reads. Pass `IWorkItemRepository` and `Logger` via constructor. Read `reference/typescript-api-implementation.md` for the exact template.
 
-18. **Create `src/routes/work-items.ts`** — `workItemsPlugin` factory function returning a `FastifyPluginAsyncZod`. Define `statusFor(error: AppError): number` as a **local function** in this file (HTTP concern — not in the domain layer). Extract a shared `ProblemDetailsSchema` constant for RFC 7807 error bodies. Declare full response schemas for all status codes on every route (200/404 for GET `:id`, 201/400 for POST, 204/404 for DELETE). Read `reference/typescript-api-implementation.md` for the exact template.
+18. **Create `src/routes/work-items.ts`** — `workItemsPlugin` factory function returning a **`FastifyPluginCallbackZod`** (NOT `FastifyPluginAsyncZod` — route registration is synchronous; `async` with no `await` triggers `@typescript-eslint/require-await`). The callback pattern requires `(app, _opts, done)` signature and `done()` at the end of the function body. Define `statusFor(error: AppError): number` as a **local function** in this file (HTTP concern — not in the domain layer). Extract a shared `ProblemDetailsSchema` constant for RFC 7807 error bodies. Declare full response schemas for all status codes on every route (200/404 for GET `:id`, 201/400 for POST, 204/404 for DELETE). Read `reference/typescript-api-implementation.md` for the exact template.
 
-19. **Create `src/main.ts`** — `buildApp(deps: AppDeps)` factory (exported for tests). Run `migrate(db, { migrationsFolder: './migrations' })` at startup, guarded by `NODE_ENV !== 'test'`. Register `setValidatorCompiler`/`setSerializerCompiler` from `@fastify/type-provider-zod`. Register `@fastify/sensible`. Set RFC 7807 `setErrorHandler`. Register `workItemsPlugin` and health check **both via `app.register(..., { prefix: '/api/v1' })`** — never hardcode the prefix path directly. Guard `app.listen` with `import.meta.url` check so tests don't start the server. Read `reference/typescript-api-config.md` for the exact template.
+19. **Create `src/main.ts`** — `buildApp(deps: AppDeps)` factory (exported for tests). Run `migrate(db, { migrationsFolder: './migrations' })` at startup, guarded by `NODE_ENV !== 'test'`. Register `setValidatorCompiler`/`setSerializerCompiler` from `fastify-type-provider-zod`. Register `@fastify/sensible`. Set RFC 7807 `setErrorHandler`. Register `workItemsPlugin` and health check **both via `app.register(..., { prefix: '/api/v1' })`** — never hardcode the prefix path directly. The health check must also use the **callback pattern** (not `async`): `(api, _opts, done) => { api.get(...); done(); }`. Guard `app.listen` with `import.meta.url` check so tests don't start the server. Read `reference/typescript-api-config.md` for the exact template.
 
 20. **Generate first migration** — Create the initial migration SQL file:
     ```bash
@@ -105,7 +113,7 @@ Delegate to the `typescript-api` skill for all patterns, templates, and referenc
 
 23. **Add Docker support** — Two-stage `Dockerfile`: `node:24-alpine` build stage (type-check + compile) and `node:24-alpine` runtime stage (`npm ci --omit=dev`). Copy `migrations/` into the runtime image — they are read by `drizzle-orm/postgres-js/migrator` at startup. Create `docker-compose.yml` with app and `postgres:17-alpine` services, health checks on both, and `depends_on: db: condition: service_healthy`. Read `reference/typescript-api-config.md` for exact templates.
 
-24. **Write unit tests** — Create `test/unit/work-item.service.test.ts`. Use `vi.fn()` stubs for `IWorkItemRepository`. Type the logger stub as `as unknown as Logger` (import `Logger` from `pino`) — never use `as any`. Cover:
+24. **Write unit tests** — Create `test/unit/work-item.service.test.ts`. Use `vi.fn()` stubs for `IWorkItemRepository`. Type the logger stub as `as unknown as Logger` (import `Logger` from `pino`) — never use `as any`. Wrap spy references with `vi.mocked()` when passing to `expect()` (avoids `unbound-method` lint). Use `Promise.resolve(value)` not `async () => value` in mock implementations (avoids `require-await` lint). Cover:
     - `listAll` returns repository result
     - `getById` returns `ok(item)` when found; `fail({ kind: 'NotFound' })` when missing
     - `create` with valid title returns created item with trimmed title and calls `save`
@@ -113,7 +121,7 @@ Delegate to the `typescript-api` skill for all patterns, templates, and referenc
     - `delete` returns `ok(true)` when deleted; `fail({ kind: 'NotFound' })` when missing
     Read `reference/typescript-api-tests.md` for the exact template.
 
-25. **Write integration tests** — Create `test/integration/work-items.routes.test.ts`. Use `buildApp({ service: makeStubService(...) })` and `app.inject()` — no real TCP port, no real DB. Cover:
+25. **Write integration tests** — Create `test/integration/work-items.routes.test.ts`. Use `buildApp({ service: makeStubService(...) })` and `app.inject()` — no real TCP port, no real DB. In `mockImplementation` callbacks, always type the parameter explicitly (e.g. `(id: WorkItemId)`) — untyped params are `any` and trigger `no-unsafe-assignment`. Use `Promise.resolve(...)` not `async (id) =>` — avoids `require-await`. Cover:
     - `POST /api/v1/workitems` → 201 with valid title; 400 with empty title; 400 with missing title field
     - `GET /api/v1/workitems/:id` → 200 when found; 404 for unknown ID; 400 for invalid UUID
     - `DELETE /api/v1/workitems/:id` → 204 when deleted; 404 when not found

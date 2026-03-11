@@ -19,7 +19,8 @@ function makeRepository(overrides: Partial<IWorkItemRepository> = {}): IWorkItem
   return {
     findAll: vi.fn().mockResolvedValue([]),
     findById: vi.fn().mockResolvedValue(null),
-    save: vi.fn().mockImplementation(async (item: WorkItem) => item),
+    // Promise.resolve() not async () => — async without await triggers require-await lint rule
+    save: vi.fn().mockImplementation((item: WorkItem) => Promise.resolve(item)),
     deleteById: vi.fn().mockResolvedValue(false),
     ...overrides,
   };
@@ -44,7 +45,10 @@ describe('WorkItemService.listAll', () => {
     const result = await sut.listAll();
 
     expect(result).toEqual(items);
-    expect(repository.findAll).toHaveBeenCalledOnce();
+    // vi.mocked() wraps the spy with its Mock type — avoids unbound-method lint error
+    // when passing a method reference to expect(). eslint.config.js disables
+    // @typescript-eslint/unbound-method for test files as a belt-and-suspenders measure.
+    expect(vi.mocked(repository.findAll)).toHaveBeenCalledOnce();
   });
 });
 
@@ -90,7 +94,7 @@ describe('WorkItemService.create', () => {
       expect(result.value.title).toBe('Walk the dog');
       expect(result.value.id).toBeDefined();
     }
-    expect(repository.save).toHaveBeenCalledWith(
+    expect(vi.mocked(repository.save)).toHaveBeenCalledWith(
       expect.objectContaining({ title: 'Walk the dog' }),
     );
   });
@@ -100,7 +104,7 @@ describe('WorkItemService.create', () => {
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.kind).toBe('ValidationError');
-    expect(repository.save).not.toHaveBeenCalled();
+    expect(vi.mocked(repository.save)).not.toHaveBeenCalled();
   });
 });
 
@@ -128,10 +132,14 @@ describe('WorkItemService.delete', () => {
 });
 ```
 
-> `vi.fn()` stubs avoid mocking the logger — logging is a side effect, not a domain
-> concern. Tests should not assert on log calls unless verifying an audit/observability feature.
-> `noopLog as any` is an acceptable workaround: the full Pino `Logger` type has ~40 methods;
-> only the 4 used by the service matter here.
+> `vi.fn()` stubs avoid mocking the logger — logging is a side effect, not a domain concern.
+> `noopLog as unknown as Logger` satisfies the full Pino `Logger` type (~40 methods) without
+> `as any` (banned by `no-explicit-any`). Only the 4 methods the service uses need to be stubbed.
+> `vi.mocked()` wraps spy references before passing to `expect()` — avoids `unbound-method`
+> lint errors. `eslint.config.js` also disables `unbound-method` for all test files because
+> `vi.fn()` mocks have no real `this` binding concerns.
+> Mock implementations use `Promise.resolve()` not `async () =>` — the latter triggers
+> `@typescript-eslint/require-await` when there is nothing to await.
 
 ---
 
@@ -144,7 +152,7 @@ import { buildApp } from '../../src/main.js';
 import type { IWorkItemService } from '../../src/services/work-item.service.interface.js';
 import { ok, fail } from '../../src/domain/errors.js';
 import { createWorkItem, newWorkItemId } from '../../src/domain/work-item.js';
-import type { WorkItem } from '../../src/domain/work-item.js';
+import type { WorkItem, WorkItemId } from '../../src/domain/work-item.js';
 
 // ── Stub service factory ───────────────────────────────────────────────────────
 // Tests pass a stub directly to buildApp({ service }) — no vi.mock() needed.
@@ -220,10 +228,12 @@ describe('GET /api/v1/workitems/:id', () => {
     app = await buildApp({
       service: makeStubService({
         getById: vi.fn()
-          .mockImplementation(async (id) =>
-            id === existingItem.id
+          // Type the id param explicitly — vi.fn() callbacks are untyped (any) by default,
+          // which triggers no-unsafe-assignment. Promise.resolve() not async — require-await.
+          .mockImplementation((id: WorkItemId) =>
+            Promise.resolve(id === existingItem.id
               ? ok(existingItem)
-              : fail({ kind: 'NotFound', id }),
+              : fail({ kind: 'NotFound', id })),
           ),
       }),
     });
@@ -261,10 +271,10 @@ describe('DELETE /api/v1/workitems/:id', () => {
     app = await buildApp({
       service: makeStubService({
         delete: vi.fn()
-          .mockImplementation(async (id) =>
-            id === existingId
+          .mockImplementation((id: WorkItemId) =>
+            Promise.resolve(id === existingId
               ? ok(true as const)
-              : fail({ kind: 'NotFound', id }),
+              : fail({ kind: 'NotFound', id })),
           ),
       }),
     });
