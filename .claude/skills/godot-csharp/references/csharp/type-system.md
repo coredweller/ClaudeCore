@@ -172,9 +172,16 @@ public enum Element { None = 0, Fire = 1, Water = 2, Earth = 4, Air = 8 }
 Use generics for type-safe node access and scene instantiation:
 
 ```csharp
-// Typed node access
-private Player _player = GetNode<Player>("%Player");
-private HealthComponent _health = GetNodeOrNull<HealthComponent>("HealthComponent");
+// Typed node access — assign in _Ready(), not as field initializers
+// (GetNode requires 'this' and cannot be called at field initialisation time)
+private Player _player;
+private HealthComponent _health;
+
+public override void _Ready()
+{
+    _player = GetNode<Player>("%Player");
+    _health = GetNodeOrNull<HealthComponent>("HealthComponent");
+}
 
 // Typed scene instantiation — avoids casting
 private static readonly PackedScene BulletScene =

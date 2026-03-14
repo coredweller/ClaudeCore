@@ -191,7 +191,7 @@ public partial class StateMachine : Node
 
         var old = CurrentState;
         CurrentState?.Exit();
-        CurrentState?.ProcessMode == ProcessModeEnum.Disabled;
+        CurrentState?.ProcessMode = ProcessModeEnum.Disabled;
 
         CurrentState = newState;
         CurrentState.ProcessMode = ProcessModeEnum.Inherit;

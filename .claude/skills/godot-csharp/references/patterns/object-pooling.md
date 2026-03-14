@@ -27,8 +27,8 @@ public partial class SimplePool : Node
     [Export] public int InitialSize { get; set; } = 20;
     [Export] public int MaxSize { get; set; } = 100;
 
-    private readonly List<Node> _available = new();
-    private readonly List<Node> _inUse = new();
+    protected readonly List<Node> _available = new();
+    protected readonly List<Node> _inUse = new();
 
     public override void _Ready() => WarmPool();
 
@@ -71,7 +71,7 @@ public partial class SimplePool : Node
         }
 
         obj.SetProcess(true);
-        obj.Show();
+        (obj as CanvasItem)?.Show();
         _inUse.Add(obj);
 
         if (obj.HasMethod("Reset"))
@@ -92,12 +92,24 @@ public partial class SimplePool : Node
 
         _inUse.Remove(obj);
         obj.SetProcess(false);
-        obj.Hide();
+        (obj as CanvasItem)?.Hide();
         _available.Add(obj);
     }
 
     public (int Available, int InUse, int Total) GetStats()
         => (_available.Count, _inUse.Count, _available.Count + _inUse.Count);
+
+    protected int GetAvailableCount() => _available.Count;
+    protected int GetInUseCount() => _inUse.Count;
+    protected int GetTotalCount() => _available.Count + _inUse.Count;
+
+    protected void RemoveOneAvailable()
+    {
+        if (_available.Count == 0) return;
+        var obj = _available[^1];
+        _available.RemoveAt(_available.Count - 1);
+        obj.QueueFree();
+    }
 }
 ```
 
@@ -297,14 +309,14 @@ public partial class TypedPool<T> : Node where T : Node
             _available.RemoveAt(_available.Count - 1);
         }
         obj.SetProcess(true);
-        obj.Show();
+        (obj as CanvasItem)?.Show();
         return obj;
     }
 
     public void Release(T obj)
     {
         obj.SetProcess(false);
-        obj.Hide();
+        (obj as CanvasItem)?.Hide();
         _available.Add(obj);
     }
 }
