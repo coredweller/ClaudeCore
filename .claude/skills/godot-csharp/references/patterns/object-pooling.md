@@ -44,9 +44,9 @@ public partial class SimplePool : Node
         obj.SetProcess(false);
         AddChild(obj);
 
-        // Auto-release if object has a "Finished" signal
-        if (obj.HasSignal("Finished"))
-            obj.Connect("Finished", Callable.From(() => Release(obj)));
+        // Auto-release if object is a Poolable — connect via SignalName for type safety
+        if (obj is Poolable poolable)
+            poolable.Finished += () => Release(obj);
 
         return obj;
     }

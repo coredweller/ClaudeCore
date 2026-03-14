@@ -208,7 +208,7 @@ public partial class Actor : CharacterBody2D
     public override void _Ready()
     {
         HealthComponent = GetNodeOrNull<HealthComponent>("HealthComponent");
-        if (HealthComponent != null)
+        if (IsInstanceValid(HealthComponent))
             HealthComponent.Died += OnDied;
     }
 

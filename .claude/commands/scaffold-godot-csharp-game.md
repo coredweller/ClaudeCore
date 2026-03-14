@@ -41,7 +41,7 @@ Delegate to the `godot-csharp` skill for all patterns, templates, and convention
 
 11. **Create `scenes/actors/player/Player.tscn`** — `CharacterBody2D` root with `Player.cs` script. Children: `HealthComponent` node, `CollisionShape2D`, `Sprite2D`. Read `references/architecture/scene-composition.md` for scene file conventions.
 
-12. **Create `scenes/levels/Level01.tscn`** — `Node2D` root. Instances `Player.tscn` at a spawn position. Includes a `TileMap` node and a `Camera2D` child on the Player. Read `references/architecture/scene-composition.md` → **Nested Scenes** for the pattern.
+12. **Create `scenes/levels/Level01.tscn`** — `Node2D` root. Instances `Player.tscn` at a spawn position. Includes a `TileMapLayer` node (deprecated `TileMap` was replaced in Godot 4.3+) and a `Camera2D` child on the Player. Read `references/architecture/scene-composition.md` → **Nested Scenes** for the pattern.
 
 13. **Create `scenes/ui/MainMenu.cs`** — `Control` node. Gets `%PlayButton` and `%QuitButton` in `_Ready`. `PlayButton.Pressed` calls `GameManager.StartGame()`; `QuitButton.Pressed` calls `GetTree().Quit()`. Read `assets/templates/base-script.cs.md` for the minimal template.
 
@@ -49,4 +49,4 @@ Delegate to the `godot-csharp` skill for all patterns, templates, and convention
 
 15. **Configure Claude** — Copy from this repository into `$ARGUMENTS/.claude/`: `rules/core-behaviors.md`, `rules/code-standards.md`, `rules/verification-and-reporting.md`, `agents/csharp-expert.md`, `agents/code-reviewer.md`, `agents/security-reviewer.md`, and the entire `skills/godot-csharp/` folder.
 
-16. **Print summary** — List all created files with one-line descriptions. Print next steps: open the folder in Godot 4.x (.NET build), verify autoloads appear in Project Settings > Autoload, add a `CollisionShape2D` shape in the editor, configure InputMap actions (`ui_left`, `ui_right`, `ui_up`, `ui_down`), and replace the placeholder TileMap with actual tiles.
+16. **Print summary** — List all created files with one-line descriptions. Print next steps: open the folder in Godot 4.x (.NET build), verify autoloads appear in Project Settings > Autoload, add a `CollisionShape2D` shape in the editor, configure InputMap actions (`ui_left`, `ui_right`, `ui_up`, `ui_down`), and replace the placeholder TileMapLayer with actual tiles.

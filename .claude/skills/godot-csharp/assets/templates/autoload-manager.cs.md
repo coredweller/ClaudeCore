@@ -5,7 +5,7 @@ Template for global singleton managers in Godot 4.x C#.
 ## Usage
 
 Register as autoload in Project Settings > Autoload. Keep autoloads thin — services only, not game logic.
-Access autoloads via `GetNode<T>("/root/ManagerName")` or by casting `Engine.GetSingleton("ManagerName")`.
+Access autoloads via `GetNode<T>("/root/ManagerName")`. Note: `Engine.GetSingleton()` is for built-in engine singletons (e.g. `RenderingServer`) — it does **not** find project autoloads registered in Project Settings.
 
 ## Basic Manager Template
 
@@ -111,28 +111,42 @@ public partial class AudioManager : Node
 
     public async void PlayMusic(AudioStream stream, bool fadeIn = true)
     {
-        if (_musicPlayer.Stream == stream && _musicPlayer.Playing) return;
+        try
+        {
+            if (_musicPlayer.Stream == stream && _musicPlayer.Playing) return;
 
-        _currentMusic = stream.ResourcePath;
+            _currentMusic = stream.ResourcePath;
 
-        if (fadeIn && _musicPlayer.Playing)
-            await FadeOutMusic();
+            if (fadeIn && _musicPlayer.Playing)
+                await FadeOutMusic();
 
-        _musicPlayer.Stream = stream;
-        _musicPlayer.Play();
+            _musicPlayer.Stream = stream;
+            _musicPlayer.Play();
 
-        if (fadeIn)
-            await FadeInMusic();
+            if (fadeIn)
+                await FadeInMusic();
 
-        EmitSignal(SignalName.MusicChanged, _currentMusic);
+            EmitSignal(SignalName.MusicChanged, _currentMusic);
+        }
+        catch (System.Exception e)
+        {
+            GD.PushError($"AudioManager.PlayMusic failed: {e.Message}");
+        }
     }
 
     public async void StopMusic(bool fadeOut = true)
     {
-        if (fadeOut)
-            await FadeOutMusic();
-        _musicPlayer.Stop();
-        _currentMusic = "";
+        try
+        {
+            if (fadeOut)
+                await FadeOutMusic();
+            _musicPlayer.Stop();
+            _currentMusic = "";
+        }
+        catch (System.Exception e)
+        {
+            GD.PushError($"AudioManager.StopMusic failed: {e.Message}");
+        }
     }
 
     private async System.Threading.Tasks.Task FadeOutMusic()
