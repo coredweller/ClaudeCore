@@ -27,7 +27,7 @@ Delegate to the `scala-play` skill for all patterns, templates, and reference fi
 
 4. **Configure Play** — Add `application.conf` with secret key (`${APP_SECRET}`), allowed hosts filter, CORS filter config, and CSRF settings. Add `logback.xml` for structured logging. Read `reference/scala-play-config.md` for templates.
 
-5. **Configure Claude** - Add all the items from `.claude` in this repository to the new repository's `.claude` folder that is related to Scala or other general cross cutting items like `code-standards.md` or `code-reviewer`.
+5. **Configure Claude** — Add all items from `.claude` in this repository to the new repository's `.claude` folder that are related to Scala or general cross-cutting concerns like `code-standards.md`, `core-behaviors.md`, `verification-and-reporting.md`, and `code-reviewer`. Include the cross-cutting agents like `architect.md`, `sql-expert.md`, `security-reviewer.md`, `postgresql-database-reviewer.md`, and `dedup-code-agent.md`. Include the required skills folders as well such as `scala-play` and `database-schema-designer`.
 
 6. **Create domain model** — Define a sample `Task` domain:
    - Opaque type `TaskId` wrapping `UUID`

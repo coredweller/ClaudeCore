@@ -13,20 +13,21 @@ Create a new Flutter mobile application with the following:
 
 ## Steps
 1. Run `flutter create --org com.company --platforms ios,android <name>`
-2. Update `pubspec.yaml` with Riverpod, Freezed, GoRouter, Firebase dependencies
-3. Create clean architecture folder structure:
+2. **Configure Claude** — Add all items from `.claude` in this repository to the new repository's `.claude` folder that are related to Flutter or general cross-cutting concerns like `code-standards.md`, `core-behaviors.md`, `verification-and-reporting.md`, and `code-reviewer`. Include the cross-cutting agents like `architect.md`, `security-reviewer.md`, `accessibility-auditor.md`, and `ui-standards-expert.md`. Include the required skills folders as well such as `flutter-mobile` and `riverpod-patterns`.
+3. Update `pubspec.yaml` with Riverpod, Freezed, GoRouter, Firebase dependencies
+4. Create clean architecture folder structure:
    - `lib/core/` — constants, theme, utils, shared widgets
    - `lib/features/<feature>/data/` — datasources, models, repositories impl
    - `lib/features/<feature>/domain/` — entities, repository contracts, usecases
    - `lib/features/<feature>/presentation/` — providers, screens, widgets
    - `lib/routing/` — GoRouter config
-4. Create a sample Freezed model with Firestore factory
-5. Create a sample Riverpod provider (annotated)
-6. Create a sample screen using `ConsumerWidget` + `AsyncValue.when()`
-7. Configure GoRouter with sample routes + auth redirect
-8. Set up `main.dart` with `ProviderScope` and Firebase init stub
-9. Add a sample widget test
-10. Run `dart run build_runner build --delete-conflicting-outputs`
-11. Print a summary of created files, next steps, and how to run
+5. Create a sample Freezed model with Firestore factory
+6. Create a sample Riverpod provider (annotated)
+7. Create a sample screen using `ConsumerWidget` + `AsyncValue.when()`
+8. Configure GoRouter with sample routes + auth redirect
+9. Set up `main.dart` with `ProviderScope` and Firebase init stub
+10. Add a sample widget test
+11. Run `dart run build_runner build --delete-conflicting-outputs`
+12. Print a summary of created files, next steps, and how to run
 
 Use the flutter-mobile skill for patterns and templates.

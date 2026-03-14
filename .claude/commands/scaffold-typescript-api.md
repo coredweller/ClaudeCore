@@ -63,7 +63,7 @@ Delegate to the `typescript-api` skill for all patterns, templates, and referenc
    Also add a test-files override block that disables `unbound-method` — `vi.fn()` mocks have no real `this` binding, so the rule is a false positive in tests. Read `reference/typescript-api-config.md` for the exact template.
    > **Why not `projectService: true`?** `tsconfig.test.json` is not named `tsconfig.json` so TypeScript's project service won't find it by directory traversal. `allowDefaultProject` covers test files that fall through. `allowDefaultProject` must NOT use `**` (banned for performance); `test/*/*.ts` covers the standard `test/unit/` + `test/integration/` layout.
 
-6. **Configure Claude** — Add all items from `.claude` in this repository to the new repository's `.claude` folder that are related to TypeScript/Node or general cross-cutting concerns like `code-standards.md`, `core-behaviors.md`, `verification-and-reporting.md`, and `code-reviewer`.
+6. **Configure Claude** — Add all items from `.claude` in this repository to the new repository's `.claude` folder that are related to TypeScript/Node or general cross-cutting concerns like `code-standards.md`, `core-behaviors.md`, `verification-and-reporting.md`, and `code-reviewer`. Include the cross cutting agents like `architect.md`, `sql-expert.md`, and `css-expert.md`. Include the required skills folders as well such as `typescript-api`
 
 7. **Create directory structure** — Create all directories upfront:
    ```

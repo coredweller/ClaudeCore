@@ -50,7 +50,7 @@ Delegate to the `csharp-dotnet-api` skill for all patterns, templates, and refer
 
 5. **Configure appsettings** — Create `appsettings.json` with Serilog config (minimum level overrides per namespace) and `Database` section with empty `ConnectionString`. Create `appsettings.Development.json` with `Debug` log level and local connection string. Read `reference/csharp-dotnet-config.md` for templates.
 
-6. **Configure Claude** — Add all items from `.claude` in this repository to the new repository's `.claude` folder that are related to C# or general cross-cutting concerns like `code-standards.md`, `code-reviewer`, `security-reviewer`.
+6. **Configure Claude** — Add all items from `.claude` in this repository to the new repository's `.claude` folder that are related to C# or general cross-cutting concerns like `code-standards.md`, `core-behaviors.md`, `verification-and-reporting.md`, and `code-reviewer`. Include the cross-cutting agents like `architect.md`, `sql-server-expert.md`, `security-reviewer.md`, `csharp-expert.md`, and `dedup-code-agent.md`. Include the required skills folders as well such as `csharp-dotnet-api` and `database-schema-designer`.
 
 7. **Create Options class** — `Options/DatabaseOptions.cs` with `[Required]` `ConnectionString` property and `const string Section = "Database"`. Validated at startup via `ValidateDataAnnotations().ValidateOnStart()`.
 

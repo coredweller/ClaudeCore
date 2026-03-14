@@ -22,18 +22,19 @@ Create a new Angular 21.x SPA project with the following:
 
 1. **Scaffold the project** — `npx @angular/cli@latest new <name> --style=scss --ssr=false`. Verify flags against fetched docs.
 2. **Install TailwindCSS 4.x + daisyUI** — `npm install tailwindcss @tailwindcss/postcss daisyui@latest`. Follow the `angular-spa` skill reference `tailwind-v4-config.md` for `.postcssrc.json` and `src/styles.css` setup.
-3. **Set up folder structure** — `core/services/`, `core/interceptors/`, `core/guards/`, `shared/components/`, `shared/pipes/`, `shared/directives/`, `features/dashboard/`.
-4. **Configure `app.config.ts`** — Follow the `angular-spa` skill template. Do NOT add zone-related providers.
-5. **Create a Dashboard feature** — Standalone component with OnPush, signals, inject(), control flow, daisyUI styling. Must render meaningful content without a backend. Follow component templates from the skill reference.
-6. **Set up lazy-loaded routes** — Root redirects to dashboard, `loadComponent` for lazy loading, wildcard redirect.
-7. **Create a sample service** — `inject(HttpClient)`, `providedIn: 'root'`, calls dashboard stats endpoint.
-8. **Handle missing backend gracefully** — Show static/fallback data when API fails; page must never be blank.
-9. **Add auth interceptor stub** — `HttpInterceptorFn` in `core/interceptors/`.
-10. **Add auth guard stub** — `CanActivateFn` in `core/guards/`.
-11. **Create environment config** — `src/environments/environment.ts` with `apiUrl`.
-12. **Add a unit test** — Dashboard component test with zoneless TestBed setup. Follow test templates from the skill reference.
-13. **Verify** — Run `npx ng build` to catch errors before finishing.
-14. **Print summary** — List created files, how to run (`npm start`), and next steps.
+3. **Configure Claude** — Add all items from `.claude` in this repository to the new repository's `.claude` folder that are related to Angular/TypeScript or general cross-cutting concerns like `code-standards.md`, `core-behaviors.md`, `verification-and-reporting.md`, and `code-reviewer`. Include the cross-cutting agents like `architect.md`, `css-expert.md`, `security-reviewer.md`, `accessibility-auditor.md`, `ui-standards-expert.md`, and `frontend-design.md`. Include the required skills folders as well such as `angular-spa` and `frontend-design`.
+4. **Set up folder structure** — `core/services/`, `core/interceptors/`, `core/guards/`, `shared/components/`, `shared/pipes/`, `shared/directives/`, `features/dashboard/`.
+5. **Configure `app.config.ts`** — Follow the `angular-spa` skill template. Do NOT add zone-related providers.
+6. **Create a Dashboard feature** — Standalone component with OnPush, signals, inject(), control flow, daisyUI styling. Must render meaningful content without a backend. Follow component templates from the skill reference.
+7. **Set up lazy-loaded routes** — Root redirects to dashboard, `loadComponent` for lazy loading, wildcard redirect.
+8. **Create a sample service** — `inject(HttpClient)`, `providedIn: 'root'`, calls dashboard stats endpoint.
+9. **Handle missing backend gracefully** — Show static/fallback data when API fails; page must never be blank.
+10. **Add auth interceptor stub** — `HttpInterceptorFn` in `core/interceptors/`.
+11. **Add auth guard stub** — `CanActivateFn` in `core/guards/`.
+12. **Create environment config** — `src/environments/environment.ts` with `apiUrl`.
+13. **Add a unit test** — Dashboard component test with zoneless TestBed setup. Follow test templates from the skill reference.
+14. **Verify** — Run `npx ng build` to catch errors before finishing.
+15. **Print summary** — List created files, how to run (`npm start`), and next steps.
 
 ## Reference
 

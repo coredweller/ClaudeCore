@@ -38,7 +38,7 @@ Delegate to the `golang-api` skill for all patterns, templates, and reference fi
 
 5. **Create `internal/db/db.go`** — `Connect(ctx, databaseURL)` returns `(*pgxpool.Pool, error)` wrapping `pgxpool.New` + `Ping`. `Migrate(databaseURL)` uses `//go:embed migrations/*.sql` + `iofs.New` + `golang-migrate` to run pending migrations. Log migration count on success. Read `reference/golang-api-templates.md` for the exact template.
 
-6. **Configure Claude** — Add all items from `.claude` in this repository to the new repository's `.claude` folder that are related to Go or general cross-cutting concerns like `code-standards.md`, `core-behaviors.md`, `verification-and-reporting.md`, and `code-reviewer`.
+6. **Configure Claude** — Add all items from `.claude` in this repository to the new repository's `.claude` folder that are related to Go or general cross-cutting concerns like `code-standards.md`, `core-behaviors.md`, `verification-and-reporting.md`, and `code-reviewer`. Include the cross-cutting agents like `architect.md`, `sql-expert.md`, `security-reviewer.md`, `postgresql-database-reviewer.md`, and `dedup-code-agent.md`. Include the required skills folders as well such as `golang-api` and `database-schema-designer`.
 
 7. **Create Flyway migrations** — Create `internal/db/migrations/000001_create_tasks_table.up.sql` and `000001_create_tasks_table.down.sql`. `up` creates the `tasks` table (`id UUID PRIMARY KEY`, `title VARCHAR(255) NOT NULL`, `description TEXT NOT NULL DEFAULT ''`, `created_at TIMESTAMPTZ NOT NULL`, `updated_at TIMESTAMPTZ NOT NULL`) with a unique index on `title` and a descending index on `created_at`. `down` drops the table. Read `reference/golang-api-templates.md` for the exact SQL.
 

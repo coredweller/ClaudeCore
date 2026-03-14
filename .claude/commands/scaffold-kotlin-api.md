@@ -25,7 +25,7 @@ Delegate to the `kotlin-api` skill for all patterns, templates, and reference fi
 
 3. **Create `Application.kt` entry point** — `fun main(args: Array<String>) = EngineMain.main(args)` and `fun Application.module()` that calls: `configureDI()`, `configureSerialization()`, `configureMonitoring()`, `configureStatusPages()`, `configureDatabase()`, `configureRouting()`. Read `reference/kotlin-api-templates.md` for the exact template.
 
-4. **Configure Claude** — Add all items from `.claude` in this repository to the new repository's `.claude` folder that are related to Kotlin or general cross-cutting concerns like `code-standards.md`, `core-behaviors.md`, `verification-and-reporting.md`, and `code-reviewer`.
+4. **Configure Claude** — Add all items from `.claude` in this repository to the new repository's `.claude` folder that are related to Kotlin or general cross-cutting concerns like `code-standards.md`, `core-behaviors.md`, `verification-and-reporting.md`, and `code-reviewer`. Include the cross-cutting agents like `architect.md`, `sql-expert.md`, `security-reviewer.md`, `postgresql-database-reviewer.md`, and `dedup-code-agent.md`. Include the required skills folders as well such as `kotlin-api` and `database-schema-designer`.
 
 5. **Wire Koin DI** — Create `config/DIModules.kt` with a top-level `val appModule = module { ... }` and `fun Application.configureDI()` installing the Koin plugin with `slf4jLogger()`. Register `TaskRepository` as `single<TaskRepository> { TaskRepositoryImpl() }` and `TaskService` as `single { TaskService(get()) }`.
 
