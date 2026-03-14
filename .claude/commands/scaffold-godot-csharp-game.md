@@ -29,7 +29,7 @@ Delegate to the `godot-csharp` skill for all patterns, templates, and convention
 
 5. **Create `autoloads/EventBus.cs`** — Global event bus with signals for game state (started, paused, resumed, game over), player (died, health changed), and level (started, completed) events. Keep it signal-only — no logic. Read `assets/templates/autoload-manager.cs.md` → **Event Bus Example** for the pattern.
 
-6. **Create `autoloads/GameManager.cs`** — Manages pause state and scene transitions (`GoToScene`, `StartGame`, `ReturnToMainMenu`, `TogglePause`). Emits `EventBus` signals on state changes. `ProcessMode = Always` so it runs while paused. Read `assets/templates/autoload-manager.cs.md` → **Basic Manager Template** for the pattern.
+6. **Create `autoloads/GameManager.cs`** — Manages pause state and scene transitions (`GoToScene`, `StartGame`, `ReturnToMainMenu`, `TogglePause`). Emits `EventBus` signals on state changes. Set `ProcessMode = ProcessModeEnum.Always` in `_Ready()` so it runs while paused. Read `assets/templates/autoload-manager.cs.md` → **Basic Manager Template** for the pattern.
 
 7. **Create `autoloads/AudioManager.cs`** — Music and SFX playback with volume control per bus. Read `assets/templates/autoload-manager.cs.md` → **Audio Manager Example** for the full implementation.
 

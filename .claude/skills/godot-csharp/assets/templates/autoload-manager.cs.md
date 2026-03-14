@@ -258,9 +258,10 @@ public partial class EventBus : Node
     [Signal] public delegate void CurrencyChangedEventHandler(int amount, int total);
     [Signal] public delegate void ItemPurchasedEventHandler(string itemId);
 
-    // Usage:
-    // EventBus.EmitSignal(EventBus.SignalName.PlayerDied);
-    // EventBus.PlayerDied += OnPlayerDied;
+    // Usage — always fetch the autoload node first; static access does not work in C#:
+    // var bus = GetNode<EventBus>("/root/EventBus");
+    // bus.EmitSignal(EventBus.SignalName.PlayerDied);
+    // bus.PlayerDied += OnPlayerDied;
 }
 ```
 
