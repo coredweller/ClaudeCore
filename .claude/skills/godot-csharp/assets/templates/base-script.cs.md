@@ -36,11 +36,13 @@ public partial class ${ClassName} : ${ParentClass}
 
     // === Exports ===
 
+    // [ExportGroup] is an Inspector section header — place it before the group's first property.
+    // Put XML doc comments directly above [Export] so they clearly document the property, not the group.
     [ExportGroup("${Group Name}")]
-    /// <summary>${Description of this property.}</summary>
     [Export] public ${Type} ${PropertyName} { get; set; } = ${defaultValue};
 
     [ExportGroup("${Another Group}")]
+    /// <summary>${Description of this property.}</summary>
     [Export] public ${Type} ${AnotherProperty} { get; set; }
 
 

@@ -2,6 +2,8 @@
 
 Complete guide to implementing robust input systems in Godot 4.x C#.
 
+> **Note:** All examples assume `<ImplicitUsings>enable</ImplicitUsings>` in the `.csproj`. BCL namespaces (`System`, `System.Collections.Generic`, `System.Linq`, etc.) are available without explicit `using` directives.
+
 ## Input System Basics
 
 Godot's input system provides:

@@ -51,7 +51,7 @@ public partial class ${ManagerName}Manager : Node
 
 ```csharp
 using Godot;
-using System.Collections.Generic;
+// System.Collections.Generic is covered by ImplicitUsings — no explicit using needed.
 
 /// <summary>
 /// Global audio playback manager.

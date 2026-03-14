@@ -60,7 +60,8 @@ public partial class SimplePool : Node
             if (_inUse.Count >= MaxSize)
             {
                 GD.PushWarning($"Pool exhausted: {PooledScene.ResourcePath}");
-                return null;
+                return null; // Intentional: returning null on exhaustion is standard game-dev practice.
+                             // Callers must guard: if (bullet == null) return;
             }
             obj = CreateInstance();
         }
