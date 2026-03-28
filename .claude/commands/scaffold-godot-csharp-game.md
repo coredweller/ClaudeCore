@@ -37,7 +37,7 @@ Delegate to the `godot-csharp` skill for all patterns, templates, and convention
 
 9. **Create `scripts/classes/Actor.cs`** — Base `CharacterBody2D` with `[Export] MoveSpeed`, wires up `HealthComponent.Died` in `_Ready`, emits own `Died` signal, and provides a `virtual OnDied()` method. Read `references/architecture/project-structure.md` → **scripts/** for the pattern.
 
-10. **Create `scenes/actors/player/Player.cs`** — Extends `Actor`. This scaffold produces a **top-down 2D** player. Read 4-directional input via `Input.GetVector("move_left", "move_right", "move_up", "move_down")` in `_PhysicsProcess` and call `MoveAndSlide`. Override `OnDied` to emit `EventBus.PlayerDied` then call `base.OnDied()` (which calls `QueueFree`). Read `assets/templates/base-script.cs.md` for script structure.
+10. **Create `scenes/actors/player/Player.cs`** — Extends `Actor`. This scaffold produces a **top-down 2D** player. Read 4-directional input via `Input.GetVector("ui_left", "ui_right", "ui_up", "ui_down")` in `_PhysicsProcess` and call `MoveAndSlide`. Override `OnDied` to emit `EventBus.PlayerDied` then call `base.OnDied()` (which calls `QueueFree`). Read `assets/templates/base-script.cs.md` for script structure.
 
 11. **Create `scenes/actors/player/Player.tscn`** — `CharacterBody2D` root with `Player.cs` script. Children: `HealthComponent` node, `CollisionShape2D`, `Sprite2D`. Read `references/architecture/scene-composition.md` for scene file conventions.
 

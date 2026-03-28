@@ -194,6 +194,29 @@ private static readonly ItemData SwordData =
     GD.Load<ItemData>("res://data/items/sword.tres");
 ```
 
+## C# GlobalClass Resource .tres Format
+
+When writing `.tres` files by hand for C# `[GlobalClass]` Resource subclasses, the header **must** use `type="Resource"` (not the class name). The class name goes in `script_class`. Using `type="WeaponResource"` (or any C# class name) will fail to load.
+
+```
+[gd_resource type="Resource" script_class="MyResource" load_steps=2 format=3 uid="uid://..."]
+
+[ext_resource type="Script" uid="uid://..." path="res://resources/MyResource.cs" id="1_xxx"]
+
+[resource]
+script = ExtResource("1_xxx")
+MyProperty = "value"
+MyInt = 42
+```
+
+- `type` → always `"Resource"` for C# GlobalClass subclasses
+- `script_class` → the C# class name (e.g. `"WeaponResource"`)
+- `load_steps` → count of header + ext_resources (e.g. 2 if one ext_resource, 3 if two)
+- Properties use their C# PascalCase names as-is
+- Resource references: `MyProp = ExtResource("id")`
+- Enum values: stored as their integer index (0, 1, 2…)
+
+
 ## Structs vs Classes
 
 Godot math types (`Vector2`, `Color`, etc.) are C# **structs** — they are value types:
