@@ -65,6 +65,7 @@ Consult official docs via MCP before writing ANY code. Zero tolerance for deprec
 | TypeScript / Node | `.claude/skills/typescript-api/` | `typescript-expert` | `/scaffold-typescript-api` |
 | Node.js / Puppeteer | `.claude/skills/node-puppeteer/` | `node-puppeteer` | — |
 | Scala | `.claude/skills/scala-play/` | `scala-developer` | `/scaffold-scala-play` |
+| Elixir / Phoenix | `.claude/skills/elixir-phoenix/` | `elixir-developer` | — |
 | Agentic AI | `.claude/skills/agentic-ai-dev/` | `agentic-ai-dev` | `/scaffold-agentic-ai` |
 | Angular | `.claude/skills/angular-spa/` | `angular-spa` | `/scaffold-angular-app` |
 | Database | `.claude/skills/database-schema-designer/` | `database-designer` | `/design-database` |
