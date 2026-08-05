@@ -8,15 +8,19 @@ my-api/
 ├── tsconfig.json                 # Build config — src/ only, outputs to dist/
 ├── tsconfig.test.json            # Type-check config — includes src/ + test/ for ESLint
 ├── vitest.config.ts              # Vitest config — coverage provider, test environment
-├── eslint.config.js              # ESLint 9 flat config
+├── eslint.config.js              # ESLint 9 flat config (root rules + a test-scoped override block)
+├── .prettierrc.json              # Prettier formatting config
+├── .prettierignore               # dist/, migrations/ — generated output, not source
 ├── .env.example
 ├── drizzle.config.ts             # Drizzle Kit configuration
 ├── src/
-│   ├── main.ts                   # Entry point + app factory + plugin registration
+│   ├── app.ts                    # loadApp() factory — plugins, error mapper, routes; no resource access
+│   ├── server.ts                 # Entry point — loadApp() → initDb() → listen(); SIGTERM/SIGINT handler
 │   ├── config.ts                 # Zod-validated env config (fails fast at startup)
-│   ├── db.ts                     # Drizzle client singleton
+│   ├── db.ts                     # initDb()/getDb()/closeDb() lifecycle — not a module-level singleton
 │   ├── routes/
-│   │   └── work-items.ts         # Fastify route plugin
+│   │   ├── work-items.ts         # createWorkItemsRouter(deps) — see reference/service-implementation.md
+│   │   └── health.ts             # createHealthRouter(checkDb) — /live, /ready, /startup
 │   ├── services/
 │   │   ├── work-item.service.ts
 │   │   └── work-item.service.interface.ts
@@ -25,9 +29,22 @@ my-api/
 │   │   └── work-item.repository.interface.ts
 │   ├── domain/
 │   │   ├── work-item.ts          # Aggregate + branded ID + factory
-│   │   └── errors.ts             # AppError discriminated union + Result type
-│   └── schema/
-│       └── work-items.schema.ts  # Drizzle table schema
+│   │   └── errors.ts             # Result<T>/ok/fail — optional, internal use only
+│   ├── errors/                   # ExtendableError subclasses + envelope — see reference/service-errors.md
+│   │   ├── ExtendableError.ts
+│   │   ├── codes.ts              # reason_code registry
+│   │   ├── types.ts              # ErrorEnvelope + ValidationErrorEnvelope
+│   │   ├── domain.ts             # NotFoundError, DomainValidationError, ConflictError
+│   │   └── helpers.ts            # sendValidationError()
+│   ├── middleware/
+│   │   └── typedErrorMapper.ts   # registerErrorMapper — see reference/service-errors.md
+│   ├── validation/                # OPTIONAL — Shape A parse-and-throw requests, see service-errors.md
+│   │   └── update-work-item-request.ts
+│   ├── validation-schema/         # Zod schemas (HTTP layer) — see service-implementation.md
+│   │   └── work-items.schema.ts  # *Schema naming + inferred types
+│   └── schema/                    # Drizzle table definitions (DB layer) — see service-database.md
+│       └── work-items.schema.ts  # Drizzle table schema — same filename, different directory:
+│                                  # validation-schema/ (Zod, HTTP) vs schema/ (Drizzle, DB)
 ├── migrations/                   # drizzle-kit generated SQL files
 └── test/
     ├── unit/
@@ -51,40 +68,67 @@ docker-compose.yml
     "node": ">=24.0.0"
   },
   "scripts": {
-    "dev": "tsx watch src/main.ts",
+    "dev": "tsx watch src/server.ts",
     "build": "tsc --project tsconfig.json",
-    "start": "node dist/main.js",
+    "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
-    "@fastify/sensible": "^6.0.2",
-    "fastify-type-provider-zod": "^4.0.2",
-    "drizzle-orm": "^0.44.0",
-    "fastify": "^5.2.0",
-    "pino": "^9.0.0",
-    "postgres": "^3.4.5",
-    "zod": "^3.24.0"
+    "@fastify/sensible": "6.0.4",
+    "fastify-type-provider-zod": "4.0.2",
+    "drizzle-orm": "0.44.7",
+    "fastify": "5.11.2",
+    "pg": "8.22.0",
+    "pino": "9.14.0",
+    "zod": "3.25.76"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0",
-    "@vitest/coverage-v8": "^3.0.0",
-    "drizzle-kit": "^0.30.0",
-    "eslint": "^9.17.0",
-    "pino-pretty": "^13.0.0",
-    "typescript-eslint": "^8.18.0",
-    "tsx": "^4.19.0",
-    "typescript": "^5.8.0",
-    "vitest": "^3.0.0"
+    "@types/node": "24.13.3",
+    "@types/pg": "8.20.4",
+    "@vitest/coverage-v8": "3.2.7",
+    "drizzle-kit": "0.30.6",
+    "eslint": "9.39.5",
+    "pino-pretty": "13.1.3",
+    "prettier": "3.9.6",
+    "typescript-eslint": "8.66.0",
+    "tsx": "4.23.6",
+    "typescript": "5.9.3",
+    "vitest": "3.2.7"
   }
 }
 ```
+
+> **Every dependency is pinned to an exact version — no `^` or `~`.** A caret range lets
+> `npm install` (a fresh clone, a CI cache miss, a Docker layer rebuild) silently resolve to a
+> newer minor/patch than what was last tested, even with a committed `package-lock.json` present
+> — `npm ci` respects the lockfile, but any workflow that runs a bare `npm install` (or a dependency
+> gets manually re-resolved) can drift. Exact pins make every version bump an explicit, reviewable
+> line in a diff instead of a transparent side effect of installing.
+>
+> **Versions above were verified against the npm registry, not carried over unchanged.** Each is
+> the highest release within the major version this skill already documents and depends on in
+> prose elsewhere (Fastify v5, Zod v3, ESLint 9 flat config, `typescript-eslint` v8, Vitest 3,
+> TypeScript 5.x) — jumping any of these to the newest major available on the registry (Zod 4,
+> ESLint 10, Vitest 4, TypeScript 7, `fastify-type-provider-zod` 7) was deliberately rejected:
+> `typescript-eslint@8.66.0`'s peer range is `typescript: '>=4.8.4 <6.1.0'`, so TypeScript 7 would
+> break linting outright, and the other majors would invalidate the version-specific explanations
+> written throughout this file (e.g. "ESLint 9 uses flat config"). `@vitest/coverage-v8` MUST
+> match `vitest`'s version exactly — its own `peerDependencies` pins `vitest` to the identical
+> version string, not a range. Re-verify and bump deliberately; don't assume these stay current.
+>
+> No `killport`-style process-killing script is included — none of the commands above bind a
+> port outside of `dev`/`start`, and `tsx watch` / the runtime process own their own lifecycle.
+> If a workflow needs to free a stuck port, that's a one-off shell command, not a maintained
+> `package.json` script.
 
 ---
 
@@ -156,6 +200,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     environment: 'node',
+    restoreMocks: true,
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],
@@ -169,6 +214,14 @@ export default defineConfig({
 > config required. The `environment: 'node'` setting ensures `crypto.randomUUID()` and
 > other Node globals are available in tests. Coverage is scoped to `src/` only; test
 > files are excluded from coverage reports.
+>
+> `restoreMocks: true` calls `vi.restoreAllMocks()` before every test — prevents a mock's
+> call history or return-value override in one test from leaking into the next. **Gotcha:**
+> for a `vi.fn()` created inside a `vi.mock('./x.js', () => ({ ... }))` factory, "restore"
+> doesn't mean "back to the factory's initial implementation" — there is no original to
+> restore to, so it reverts to a no-op returning `undefined`. Any test after the first one
+> in a file that relies on that mock's return value breaks silently unless it's re-armed. See
+> `reference/service-tests.md` for the `beforeEach` pattern this requires.
 
 ---
 
@@ -177,6 +230,9 @@ export default defineConfig({
 ```typescript
 import { z } from 'zod';
 
+// Every key below MUST correspond to a real environment variable — this schema is a direct
+// map of env var name → validator, nothing more. Never add a derived/computed key here;
+// compute derived values from `config` after parsing, in a separate export.
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(3000),
@@ -188,33 +244,48 @@ const envSchema = z.object({
 // Never access process.env directly elsewhere — import `config` instead.
 export const config = envSchema.parse(process.env);
 export type Config = z.infer<typeof envSchema>;
+
+// One entry per schema key, no more, no less — `Record<keyof Config, …>` makes an omission
+// a compile error instead of a runtime gap. Anything holding a credential, token, or secret
+// (DATABASE_URL embeds a Postgres password) MUST be `sensitive: true`.
+const fieldMeta: Record<keyof Config, { sensitive: boolean }> = {
+  NODE_ENV: { sensitive: false },
+  PORT: { sensitive: false },
+  DATABASE_URL: { sensitive: true },
+  LOG_LEVEL: { sensitive: false },
+};
+
+// Redacted view of `config` — the ONLY form of config allowed in logs, health/debug endpoints,
+// or any *.json output. Never `JSON.stringify(config)` or pass `config` itself to a logger;
+// that bypasses redaction and leaks credentials into log aggregators or served JSON.
+export function getProperties(): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(config).map(([key, value]) => [
+      key,
+      fieldMeta[key as keyof Config].sensitive ? '***REDACTED***' : value,
+    ]),
+  );
+}
 ```
 
 > Import `config` everywhere instead of reading `process.env` directly.
 > The parse call throws a `ZodError` at startup — crashes loudly before serving a single request.
+>
+> `getProperties()` exists so credentials never appear in `*.json` config files or log output:
+> anywhere config needs to be serialized, dumped, or logged — a debug endpoint, a startup log
+> line, a support bundle — call `getProperties()`, never `config` directly. Adding a new env var
+> to `envSchema` without adding a matching `fieldMeta` entry fails `tsc`, not a code review.
 
 ---
 
 ## src/db.ts
 
-```typescript
-import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
-import { config } from './config.js';
-import * as schema from './schema/work-items.schema.js';
-
-const client = postgres(config.DATABASE_URL, {
-  max: 10,            // connection pool size
-  idle_timeout: 30,   // seconds before idle connections are closed
-});
-
-export const db = drizzle(client, { schema });
-export type Db = typeof db;
-```
+See `reference/service-database.md` for the full `initDb()/getDb()/closeDb()` implementation,
+`DbClient = Db | TX` type definition, DB config env vars with TLS defaults, and forbidden patterns.
 
 ---
 
-## src/main.ts
+## src/app.ts
 
 ```typescript
 import Fastify from 'fastify';
@@ -223,26 +294,26 @@ import {
   serializerCompiler,
   validatorCompiler,
 } from 'fastify-type-provider-zod';
-import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { config } from './config.js';
-import { db } from './db.js';
+import { checkDb } from './db.js';
 import { DrizzleWorkItemRepository } from './repositories/work-item.repository.js';
 import { WorkItemService } from './services/work-item.service.js';
 import type { IWorkItemService } from './services/work-item.service.interface.js';
-import { workItemsPlugin } from './routes/work-items.js';
+import { createWorkItemsRouter } from './routes/work-items.js';
+import { createHealthRouter } from './routes/health.js';
+import { registerErrorMapper } from './middleware/typedErrorMapper.js';
+import { ReasonCode } from './errors/codes.js';
+import type { ErrorEnvelope } from './errors/types.js';
 
 // Optional deps allow tests to inject stub implementations without vi.mock()
 interface AppDeps {
   service?: IWorkItemService;
 }
 
-export async function buildApp(deps: AppDeps = {}) {
-  // Run pending migrations before accepting traffic.
-  // drizzle-orm/migrator reads the SQL files directly — drizzle-kit is not required at runtime.
-  if (config.NODE_ENV !== 'test') {
-    await migrate(db, { migrationsFolder: './migrations' });
-  }
-
+// No resource access here — initDb() runs in server.ts, after this factory returns.
+// Integration tests call loadApp() directly and never touch the database (see
+// reference/service-database.md, "Startup Sequence").
+export async function loadApp(deps: AppDeps = {}) {
   const app = Fastify({
     logger: {
       level: config.LOG_LEVEL,
@@ -260,45 +331,60 @@ export async function buildApp(deps: AppDeps = {}) {
   // ── Plugins ────────────────────────────────────────────────────────────────
   await app.register(sensible);
 
-  // ── Error handler (RFC 7807 ProblemDetails) ────────────────────────────────
-  app.setErrorHandler((error, request, reply) => {
-    request.log.error({ err: error }, 'Unhandled error');
-    reply.status(error.statusCode ?? 500).send({
-      type: 'https://tools.ietf.org/html/rfc7807',
-      title: error.message ?? 'Internal Server Error',
-      status: error.statusCode ?? 500,
-      instance: request.url,
-    });
+  // ── 404 + error handler ────────────────────────────────────────────────────
+  // setNotFoundHandler first, then registerErrorMapper — see reference/service-errors.md
+  // for the full ErrorEnvelope/ExtendableError model. No ad-hoc reply.status(4xx).send({...})
+  // anywhere in this file — that's the named anti-pattern; typedErrorMapper owns every status.
+  app.setNotFoundHandler((request, reply) => {
+    return reply.status(404).send({
+      success: false,
+      message: `Route ${request.method}:${request.url} not found`,
+      reason_code: ReasonCode.NotFound,
+    } satisfies ErrorEnvelope);
   });
+  registerErrorMapper(app);
 
   // ── Dependencies ───────────────────────────────────────────────────────────
-  const repository = new DrizzleWorkItemRepository(db, app.log);
+  // DrizzleWorkItemRepository takes no db — db is injected per call by the service
+  // (see reference/service-database.md, "Repository Signatures — DbClient Pattern").
+  const repository = new DrizzleWorkItemRepository(app.log);
   const service = deps.service ?? new WorkItemService(repository, app.log);
 
   // ── Routes ─────────────────────────────────────────────────────────────────
-  await app.register(workItemsPlugin(service), { prefix: '/api/v1' });
+  await app.register(createWorkItemsRouter({ service }), { prefix: '/api/v1' });
 
-  // ── Health check ───────────────────────────────────────────────────────────
-  // Registered under the same prefix so a single change keeps all routes consistent.
-  // Callback pattern (not async) — no awaiting during registration, so async would
-  // trigger @typescript-eslint/require-await. done() signals Fastify plugin is complete.
-  await app.register((api, _opts, done) => {
-    api.get('/health', () => ({ status: 'ok' }));
-    done();
-  }, { prefix: '/api/v1' });
+  // ── Health probes ──────────────────────────────────────────────────────────
+  // Unprefixed (/live, /ready, /startup) — deliberately NOT under /api/v1. See
+  // reference/service-implementation.md, "Health Router", for why probes stay outside
+  // API versioning/auth/business middleware. checkDb is injected, not imported directly,
+  // so createHealthRouter itself never touches db.ts.
+  await app.register(createHealthRouter(checkDb));
 
   return app;
 }
-
-// Only start the server when this file is the entry point (not in tests)
-if (import.meta.url === `file://${process.argv[1]}`) {
-  const app = await buildApp();
-  await app.listen({ port: config.PORT, host: '0.0.0.0' });
-}
 ```
 
-> `buildApp()` is exported so tests can call it without starting the HTTP server.
-> `import.meta.url` guard prevents double-starting in test environments.
+> `loadApp()` is exported so both `server.ts` and integration tests can build a fully-wired
+> Fastify instance without ever touching the database. This is the naming this skill's other
+> reference files (`service-database.md`, `service-lifecycle.md`, `SKILL.md`) already assume —
+> `app.ts`/`loadApp()`, not `main.ts`/`buildApp()`.
+> `createWorkItemsRouter({ service })` — deps as an object even though there's only one field
+> today — matches `WorkItemsRouterDeps`; `createHealthRouter(checkDb)` takes its one dependency
+> positionally instead, per the single-dependency exception documented alongside it.
+
+---
+
+## src/server.ts
+
+See `reference/service-lifecycle.md` for the full entry-point implementation: `loadApp()` →
+`initDb()` → run pending migrations → `server.listen()`, plus the SIGTERM/SIGINT handler,
+force-exit timer, and `closeIdleConnections()`.
+
+> Migrations run in `server.ts`, **after** `initDb()` — never inside `loadApp()`. `loadApp()`
+> has no DB access at all (see `src/app.ts` above); running `migrate()` there would mean every
+> integration test needs a live database. The migrator import is
+> `drizzle-orm/node-postgres/migrator` — matching the `pg`/`node-postgres` driver this skill
+> uses (see `reference/service-database.md`), not `drizzle-orm/postgres-js/migrator`.
 
 ---
 
@@ -362,7 +448,7 @@ export default defineConfig({
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  // Apply type-aware rules to all source and test TypeScript files
+  // ── Root rules: apply to all source and test TypeScript files ──────────────
   {
     files: ['src/**/*.ts', 'test/**/*.ts'],
     extends: [
@@ -391,6 +477,7 @@ export default tseslint.config(
       '@typescript-eslint/no-floating-promises': 'error',
     },
   },
+  // ── Test-scoped overrides: rules that only make sense inside test/ ─────────
   // In test files vi.fn() mocks have no real `this` binding — unbound-method is a false positive.
   // @vitest/eslint-plugin would handle this automatically; we replicate its behaviour here.
   {
@@ -406,7 +493,15 @@ export default tseslint.config(
 );
 ```
 
-> ESLint 9 uses **flat config** (`eslint.config.js`) — no `.eslintrc` files.
+> ESLint 9 uses **flat config** (`eslint.config.js`) — no `.eslintrc` files. This is a single
+> exported array, not one file per scope: **do not** create `.eslintrc.js` (root) or
+> `tests/.eslintrc.js` files — ESLint 9 never loads them, and their presence next to a working
+> `eslint.config.js` is dead config that silently does nothing. The "root vs. tests" split
+> those legacy filenames implied is expressed above as two config objects in the same array:
+> the first block (`files: ['src/**/*.ts', 'test/**/*.ts']`) is the root ruleset, the second
+> (`files: ['test/**/*.ts']`) is the test-scoped override — same separation of concerns,
+> flat-config idiom.
+>
 > `typescript-eslint` is the unified v8 package that replaces the separate
 > `@typescript-eslint/parser` + `@typescript-eslint/eslint-plugin` pair.
 > `recommendedTypeChecked` enables rules that require type information (e.g. `no-floating-promises`) —
@@ -415,6 +510,34 @@ export default tseslint.config(
 > `allowDefaultProject` + `defaultProject` are required.
 > `allowDefaultProject` must NOT use `**` (banned for performance); use `test/*/*.ts` to cover
 > the standard `test/unit/` and `test/integration/` layout.
+
+---
+
+## .prettierrc.json
+
+```json
+{
+  "semi": true,
+  "singleQuote": true,
+  "trailingComma": "all",
+  "printWidth": 100,
+  "tabWidth": 2
+}
+```
+
+## .prettierignore
+
+```
+dist
+migrations
+```
+
+> `singleQuote` matches the quote style already implied by the ESLint rules above; keeping
+> Prettier and ESLint aligned avoids the two tools fighting over the same line. Prettier owns
+> formatting only — none of the ESLint rules in `eslint.config.js` are stylistic/formatting
+> rules, so there's no rule overlap to disable. `dist/` and `migrations/` are generated output,
+> not hand-written source — formatting them is wasted work and risks rewriting a drizzle-kit
+> migration file byte-for-byte on every run.
 
 ---
 
@@ -457,7 +580,7 @@ COPY --from=build /app/dist ./dist
 COPY migrations/ ./migrations/
 
 EXPOSE 3000
-ENTRYPOINT ["node", "dist/main.js"]
+ENTRYPOINT ["node", "dist/server.js"]
 ```
 
 > Two-stage build: the `build` stage type-checks before compiling — a bad type is a
@@ -482,7 +605,7 @@ services:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/v1/health"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/ready"]
       interval: 10s
       retries: 3
 

@@ -38,6 +38,56 @@ catch (e) {
 - NEVER create mock data unless explicitly requested
 - Language-specific patterns: see each technology's skill (e.g., `java-spring-api`, `nestjs-api`, `python-dev`, `flutter-mobile`)
 
+## Type Safety
+
+Applies to every statically-typeable language in this project (TypeScript, Java, Kotlin, C#, Go, Scala):
+
+- **No unsafe escape hatches** outside justified boundary code — `any` (TypeScript), an unchecked cast, a raw `Object`/`interface{}` held past the point of deserialization. If input is untrusted (external API, user input, a parsed file), parse it into a typed shape **once**, at the boundary, then never touch the untyped form again.
+- **Narrow, don't assert.** A type assertion (`as X`, an unchecked cast) claims a fact the compiler didn't verify — prefer a runtime check (a validator, a type guard, a discriminated-union tag check) that actually proves it.
+- **Exhaustive handling of unions/enums/sealed types.** A `switch`/`match` over a closed set of variants must be exhaustive — adding a new variant should fail to compile (or fail a lint rule), never fall through a silent `default`.
+- **Nullability is explicit.** "This may be absent" is a type-system fact (optional/nullable types), not a comment or a naming convention (`maybeFoo`).
+- **Immutable by default for domain models.** Mutable state is the exception — justify it in a comment when used, don't default to it.
+- Language-specific enforcement (strict compiler flags, exhaustiveness-check lint rules, branded/opaque types): see each technology's skill — e.g. `typescript-api`'s `noUncheckedIndexedAccess` / `exactOptionalPropertyTypes` / `@typescript-eslint/no-explicit-any`.
+
+## Resource Lifecycle
+
+Any long-lived resource (database pool, Redis client, gRPC channel, message queue consumer) MUST follow this contract:
+
+| Function | Behaviour |
+|----------|-----------|
+| `initX()` | **Fails on double-init** — throws or returns early if already initialized; performs a connection-level health check before returning |
+| `closeX()` | **Idempotent** — safe to call multiple times; never throws; resets internal state so `initX()` could be called again if needed |
+| `getX()` | **Throws if uninitialized** — error message must name the resource and the required init call (`"DB not initialized — call initDb() first"`) |
+
+### Wiring Rules
+
+1. `initX()` is called in the **entry point** (`server.ts`, `main.py`, `main.go`) **after** the app factory returns — never inside the factory
+2. `closeX()` is added to the SIGTERM/SIGINT handler in **reverse init order** (last-initialized, first-closed)
+3. The signal handler MUST start a **force-exit timer** so a stalled teardown cannot hang the process indefinitely
+4. The force-exit timer MUST be unref'd (Node.js) or equivalent — it must not itself keep the process alive when all other work is done
+
+> Canonical Node.js / Fastify implementation: `reference/service-lifecycle.md` in the `typescript-api` skill.
+
+## Service vs. Repository Layering
+
+Two directions, one rule: **repositories never fetch their own connection/transaction handle;
+services own that handle for the duration of a use case and pass it to every repository call.**
+
+| Layer | Owns | Never |
+|-------|------|-------|
+| Repository | Query/persistence logic for one aggregate; accepts the active connection/transaction handle as a parameter on every method | Fetch its own connection/transaction handle internally; contain business rules; return framework-specific row/entity types across its own boundary |
+| Service | Business rules; deciding whether a use case needs a transaction; passing the same connection/transaction handle to every repository call inside one use case | Contain persistence/query logic directly; leak framework types (ORM rows, driver clients) past its own boundary |
+
+**Why the handle flows one way (service → repository, never repository → global accessor):** if
+a repository fetches its own connection instead of accepting one, a service that wraps two
+repository calls in a single transaction can't guarantee both actually run inside it — one call
+silently executes outside the transaction, so a failure partway through leaves partial writes
+with no rollback.
+
+Language-specific implementation (the connection-handle-as-parameter pattern, the type extracted
+from a transaction callback, the exact non-negotiable rule text): see each technology's skill —
+e.g. `typescript-api`'s `reference/service-database.md`, "Repository Signatures — DbClient Pattern".
+
 ## DRY Enforcement
 
 Before writing ANY code:

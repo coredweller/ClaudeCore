@@ -1,7 +1,10 @@
 # TypeScript REST API — Domain Templates
 
 Pure TypeScript domain layer: aggregate roots, value objects, error types, and repository/service contracts.
-No framework dependencies — these files have zero Fastify, Drizzle, or Vitest imports.
+No framework dependencies for domain **logic** — `work-item.ts` and `errors.ts` have zero
+Fastify, Drizzle, or Vitest imports. The one exception is `DbClient` in the repository
+interface: an opaque persistence-handle port type, not a Drizzle query-API dependency —
+see the note under Repository Interface below.
 
 ## Directory Layout
 
@@ -9,7 +12,8 @@ No framework dependencies — these files have zero Fastify, Drizzle, or Vitest 
 src/
 ├── domain/
 │   ├── work-item.ts                    # Aggregate root + branded ID + factory
-│   └── errors.ts                       # AppError discriminated union + Result<T>
+│   └── errors.ts                       # Result<T>/ok/fail — optional, internal use only
+├── errors/                             # ExtendableError subclasses — see reference/service-errors.md
 ├── repositories/
 │   ├── work-item.repository.interface.ts
 │   └── work-item.repository.ts         # Drizzle implementation (see implementation reference)
@@ -77,15 +81,15 @@ export function reconstituteWorkItem(
 
 ## Domain Errors — `src/domain/errors.ts`
 
-```typescript
-// ── AppError discriminated union — exhaustive, pattern-matchable ───────────
-export type AppError =
-  | { readonly kind: 'NotFound'; readonly id: string }
-  | { readonly kind: 'ValidationError'; readonly message: string }
-  | { readonly kind: 'Conflict'; readonly message: string };
+`AppError` as a discriminated union is removed. Error propagation now uses custom error classes that extend `ExtendableError`. See `reference/service-errors.md` for the full class hierarchy.
 
-// ── Result<T> — makes error states explicit in function signatures ──────────
-export type Result<T, E = AppError> =
+`Result<T>` is retained as an optional internal mechanism for functions that prefer explicit branching over throwing:
+
+```typescript
+// ── Result<T> — optional; useful for pure functions that branch without throwing ──
+import type { ExtendableError } from '../errors/ExtendableError.js';
+
+export type Result<T, E extends ExtendableError = ExtendableError> =
   | { readonly ok: true; readonly value: T }
   | { readonly ok: false; readonly error: E };
 
@@ -93,14 +97,14 @@ export function ok<T>(value: T): Result<T, never> {
   return { ok: true, value };
 }
 
-export function fail<E extends AppError>(error: E): Result<never, E> {
+export function fail<E extends ExtendableError>(error: E): Result<never, E> {
   return { ok: false, error };
 }
 ```
 
-> `Result<T>` replaces exceptions for domain errors. Services return `Promise<Result<T>>` —
-> callers handle both outcomes explicitly. HTTP status mapping lives in the route plugin,
-> not here — the domain has no knowledge of HTTP.
+> Services throw custom error classes directly — they do not return `Result<T>` at the
+> service boundary. `Result<T>` may be used for internal helper functions where explicit
+> branching is clearer than throwing. HTTP error mapping is never a domain concern.
 
 ---
 
@@ -108,18 +112,26 @@ export function fail<E extends AppError>(error: E): Result<never, E> {
 
 ```typescript
 import type { WorkItem, WorkItemId } from '../domain/work-item.js';
+import type { DbClient } from '../db.js';
 
 export interface IWorkItemRepository {
-  findAll(): Promise<readonly WorkItem[]>;
-  findById(id: WorkItemId): Promise<WorkItem | null>;
-  save(item: WorkItem): Promise<WorkItem>;
-  deleteById(id: WorkItemId): Promise<boolean>;
+  findAll(db: DbClient): Promise<readonly WorkItem[]>;
+  findById(db: DbClient, id: WorkItemId): Promise<WorkItem | null>;
+  save(db: DbClient, item: WorkItem): Promise<WorkItem>;
+  deleteById(db: DbClient, id: WorkItemId): Promise<boolean>;
 }
 ```
 
-> The interface depends only on domain types — no Drizzle imports, no `db` type.
-> This keeps the domain layer framework-agnostic and allows the Drizzle implementation
-> to be swapped (e.g. for an in-memory stub in tests) without touching any service code.
+> `DbClient` is treated as a persistence-handle **port**, not a dependency on Drizzle's query
+> API — the interface never calls a Drizzle method on it, it only threads the handle through
+> so the service layer can decide whether a call participates in a transaction (see
+> `reference/service-database.md`, "Repository Signatures — DbClient Pattern"). This is the one
+> type-level exception to "no framework dependencies" at the top of this file: domain **logic**
+> (branded IDs, factories, error classes) stays Drizzle-free; the repository **contract** carries
+> one opaque handle type so `IWorkItemRepository` and `DrizzleWorkItemRepository`
+> (`reference/service-implementation.md`) actually satisfy the same shape — without it, a
+> Drizzle-backed repository cannot implement this interface at all, since transaction
+> participation requires the caller to pass the active `db`/`tx` handle into every call.
 
 ---
 
@@ -127,17 +139,16 @@ export interface IWorkItemRepository {
 
 ```typescript
 import type { WorkItem, WorkItemId } from '../domain/work-item.js';
-import type { Result } from '../domain/errors.js';
 
 export interface IWorkItemService {
   listAll(): Promise<readonly WorkItem[]>;
-  getById(id: WorkItemId): Promise<Result<WorkItem>>;
-  create(title: string): Promise<Result<WorkItem>>;
-  delete(id: WorkItemId): Promise<Result<true>>;
+  getById(id: WorkItemId): Promise<WorkItem>;     // throws NotFoundError
+  create(title: string): Promise<WorkItem>;       // throws DomainValidationError
+  delete(id: WorkItemId): Promise<void>;          // throws NotFoundError
 }
 ```
 
-> `listAll()` returns `readonly WorkItem[]` directly — it never fails in a domain sense
-> (an empty list is a valid result). Methods that can fail return `Promise<Result<T>>`.
+> Methods that can fail throw a custom `ExtendableError` subclass — they do not return `Result<T>`.
+> Callers (route handlers) let the error propagate to `typedErrorMapper`.
 > Route handlers depend on `IWorkItemService`, not the concrete `WorkItemService` —
-> this enables stub injection via `buildApp({ service })` in integration tests.
+> this enables stub injection via `loadApp({ service })` in integration tests.
