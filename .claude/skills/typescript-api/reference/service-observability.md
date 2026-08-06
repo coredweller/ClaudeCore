@@ -20,18 +20,21 @@ Load this reference when the service emits **custom application metrics** to Dat
 ```typescript
 import StatsD from 'hot-shots';
 import { config } from './config.js';
+import { logger } from './logger.js';
 
 let _metrics: StatsD | null = null;
 
-// Throttle DogStatsD connection errors — a dead agent would otherwise flood stderr.
-// Module-level so the throttle state persists across calls.
+// Throttle DogStatsD connection errors — a dead agent would otherwise flood the logs at
+// however often hot-shots retries. Module-level so the throttle state persists across calls.
 let _lastErrorAt = 0;
 function onMetricsError(err: Error): void {
   const now = Date.now();
   if (now - _lastErrorAt >= 60_000) {
     _lastErrorAt = now;
-    // process.stderr: no request context and no Pino instance available in this callback
-    process.stderr.write(`[metrics] DogStatsD error (throttled to 1/min): ${err.message}\n`);
+    // logger (src/logger.ts), not request.log — this callback fires from hot-shots' own
+    // internals, never from inside a request, so there is no request.log in scope. Same
+    // reasoning as db.ts's pool.on('error', ...) handler in reference/service-database.md.
+    logger.error({ err }, 'DogStatsD error (throttled to 1/min)');
   }
 }
 

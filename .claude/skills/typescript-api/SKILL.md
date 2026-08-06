@@ -80,7 +80,7 @@ npm run db:studio    # Drizzle Studio (visual DB browser)
 | Result type | `type Result<T, E = ExtendableError> = \| { ok: true; value: T } \| { ok: false; error: E }` — internal use only |
 | Service return | Throw custom error class on failure; return value directly on success |
 | Router | `createFooRouter(deps: FooDeps): FastifyPluginCallbackZod` — deps object injected (not imported), mounted via `app.register(createFooRouter(deps), { prefix })`; a router with exactly one dependency (e.g. `createHealthRouter(checkDb)`) takes it positionally instead of wrapping a one-field deps object |
-| Health probes | `createHealthRouter(checkDb)` mounted unprefixed, outside `/api/v1` — `/live` and `/startup` return `{ status, version }` immediately with no dependency check; `/ready` awaits `checkDb()`, returns 503 (not an `ErrorEnvelope`) if unreachable |
+| Health probes + root | `createHealthRouter(checkDb)` mounted unprefixed, outside `/api/v1` — `/`, `/live`, and `/startup` return `{ status, version }` immediately with no dependency check; `/ready` awaits `checkDb()`, returns 503 (not an `ErrorEnvelope`) if unreachable |
 | Route handler | `throw new XError(...)` on failure; `return value` on success — **never** `reply.status(4xx).send(...)` |
 | Error envelope | `{ success: false, message: string, reason_code: number }` — all errors, every status code |
 | typedErrorMapper | `app.setErrorHandler(...)` in `loadApp()` — sole place for class→status mapping; no `instanceof` in routes |
@@ -97,7 +97,8 @@ npm run db:studio    # Drizzle Studio (visual DB browser)
 
 | File | Read when... |
 |------|-------------|
-| `reference/service-config.md` | Scaffolding a new service; editing `package.json`, `tsconfig.json`, Dockerfile, env schema, `src/app.ts`, or `src/server.ts` |
+| `reference/service-config.md` | Scaffolding a new service; editing `package.json`, `tsconfig.json`, Dockerfile, or env schema |
+| `reference/service-app.md` | Editing `src/app.ts` (`loadApp()`), Fastify plugin/middleware/hook wiring order, or logger config |
 | `reference/service-database.md` | Writing repositories, DB-backed service methods, schema definitions, or database config |
 | `reference/service-lifecycle.md` | Editing the `server.ts` entry point; adding or removing a resource with an init/close lifecycle |
 | `reference/service-errors.md` | Writing route handlers, error classes, `typedErrorMapper`, or any code that throws or catches |

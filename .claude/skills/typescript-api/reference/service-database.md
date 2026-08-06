@@ -32,6 +32,7 @@ import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { sql } from 'drizzle-orm';
 import { config } from './config.js';
+import { logger } from './logger.js';
 import * as schema from './schema/index.js';
 
 let _pool: Pool | null = null;
@@ -54,10 +55,28 @@ export async function initDb(): Promise<void> {
     ssl: config.DATABASE_SSL ? { rejectUnauthorized: true } : false,
   });
 
-  // Fail-fast: verify the DB is reachable before accepting HTTP traffic.
-  // A broken DATABASE_URL crashes the process here, not on the first request.
+  // Required. node-postgres emits 'error' on the Pool whenever an idle client in the pool
+  // hits a network-level failure (the DB restarts, a connection is reset, a firewall drops
+  // an idle socket). Without this listener, that's an unhandled 'error' event, which is fatal
+  // in Node — the entire process crashes, taking down every in-flight request, not just the
+  // one connection. With it, the failure is logged and the pool quietly replaces the dead
+  // client on the next checkout.
+  pool.on('error', (err) => {
+    logger.error({ err }, 'Unexpected error on idle pg client');
+  });
+
+  // Fail-fast: verify the DB is reachable — and that credentials, TLS config, and network
+  // routing are all valid — before accepting HTTP traffic. A wrong password, an unreachable
+  // host, or a bad DATABASE_URL crashes the process here, at startup, instead of surfacing as
+  // a 500 on whichever request happens to be the first one that touches the database.
   const client = await pool.connect();
-  client.release();
+  try {
+    await client.query('SELECT 1');
+  } finally {
+    // Always release in `finally` — if the check query above throws, the client must still
+    // return to the pool (or be destroyed by pg) rather than being held open forever.
+    client.release();
+  }
 
   _pool = pool;
   _db = drizzle(pool, { schema });
@@ -93,24 +112,37 @@ export async function checkDb(): Promise<boolean> {
 
 ---
 
-## src/config.ts — DB Additions
+## Accessor, Not Export
 
-Add these fields to the Zod env schema:
+`_pool` and `_db` are `let` bindings private to `db.ts` — neither is ever exported, not even
+as a `readonly` reference, and not even temporarily for a one-off script or debug endpoint.
+The only exported surface is the three functions: `initDb()`, `getDb()`, `closeDb()`.
+
+**Route handlers, services, and repositories call `getDb()` — they never `import { _db }`.**
+There is nothing to import; the underlying variable has no external name. This is what makes
+the "throws if uninitialized" contract from `code-standards.md`'s Resource Lifecycle table
+actually enforceable: if `_db` itself were exported, any caller could read it directly, get
+`null` before `initDb()` has run, and hit a confusing `Cannot read properties of null` deep
+inside a Drizzle call instead of `getDb()`'s explicit, named error. An accessor function is
+also the only way `closeDb()` can safely reset state — every caller re-fetches via `getDb()`
+rather than holding a stale reference from before a close/reinit cycle (relevant in tests,
+where `closeDb()` → `initDb()` may run repeatedly against a test database).
 
 ```typescript
-DATABASE_URL: z.string().min(1),
-DATABASE_SSL: z.coerce.boolean().default(true),       // TLS on by default; set false for local dev
-DB_POOL_MAX: z.coerce.number().int().positive().default(10),
-DB_IDLE_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
-```
+// ❌ Forbidden — exporting the mutable binding directly
+export let _db: Db | null = null;
 
-Update `.env.example`:
+// ❌ Forbidden — a repository or route holding its own reference instead of calling getDb()
+import { _db } from '../db.js';
+async findById(id: WorkItemId) {
+  return _db.select()...  // stale if closeDb()/initDb() ran again; no uninitialized guard
+}
 
-```dotenv
-DATABASE_URL=postgres://myapi:secret@localhost:5432/myapi_dev
-DATABASE_SSL=false    # disable TLS for local dev only — leave unset (defaults true) in prod
-DB_POOL_MAX=10
-DB_IDLE_TIMEOUT_MS=30000
+// ✅ Required — every call site fetches through the accessor
+import { getDb } from '../db.js';
+async findById(id: WorkItemId, db: DbClient) {
+  return db.select()...  // db passed in by the service, itself sourced from getDb()
+}
 ```
 
 ---
@@ -136,7 +168,14 @@ export type NewWorkItemRow = typeof workItems.$inferInsert;
 
 Rules:
 - Always pass `{ withTimezone: true }` to every `timestamp()` column — stores UTC, eliminates timezone bugs
-- Use `uuid().defaultRandom()` for primary keys — no auto-increment sequences
+- **`uuid('id').primaryKey().defaultRandom()` over auto-increment integers.** A `serial`/
+  `bigserial` primary key leaks the row count and insertion order to anyone who can see an ID
+  (enumerable in a public API — `/workitems/1043` implies ~1043 rows exist), and it forces a
+  round trip to the database to learn the ID of a row before it's inserted. `defaultRandom()`
+  generates the UUID (`gen_random_uuid()`) in Postgres at insert time — same DB-side guarantee
+  of uniqueness — but the value carries no sequence information and never collides across
+  shards, replicas, or a restored-from-backup table where a sequence counter could otherwise
+  repeat.
 - Define indexes and constraints in `pgTable`'s third argument, not in migration SQL by hand
 - One schema file per aggregate root — `src/schema/` is a flat directory
 - Never expose `WorkItemRow` outside the repository boundary — return domain objects
@@ -260,4 +299,9 @@ const client = await pool.connect();
 await client.query('SELECT 1');  // if this throws, client is never released
 client.release();
 // Correct: wrap in try/finally, or use pool.query() for one-off queries
+
+// ❌ No pool.on('error', ...) listener — an idle client's network failure becomes an
+// unhandled 'error' event, which crashes the entire Node process, not just that connection
+const pool = new Pool({ connectionString: config.DATABASE_URL });
+// Missing: pool.on('error', (err) => logger.error({ err }, '...'));
 ```

@@ -17,6 +17,7 @@ my-api/
 │   ├── app.ts                    # loadApp() factory — plugins, error mapper, routes; no resource access
 │   ├── server.ts                 # Entry point — loadApp() → initDb() → listen(); SIGTERM/SIGINT handler
 │   ├── config.ts                 # Zod-validated env config (fails fast at startup)
+│   ├── logger.ts                 # Shared Pino singleton — see reference/service-app.md
 │   ├── db.ts                     # initDb()/getDb()/closeDb() lifecycle — not a module-level singleton
 │   ├── routes/
 │   │   ├── work-items.ts         # createWorkItemsRouter(deps) — see reference/service-implementation.md
@@ -285,106 +286,18 @@ See `reference/service-database.md` for the full `initDb()/getDb()/closeDb()` im
 
 ---
 
-## src/app.ts
+## src/app.ts and src/server.ts
 
-```typescript
-import Fastify from 'fastify';
-import sensible from '@fastify/sensible';
-import {
-  serializerCompiler,
-  validatorCompiler,
-} from 'fastify-type-provider-zod';
-import { config } from './config.js';
-import { checkDb } from './db.js';
-import { DrizzleWorkItemRepository } from './repositories/work-item.repository.js';
-import { WorkItemService } from './services/work-item.service.js';
-import type { IWorkItemService } from './services/work-item.service.interface.js';
-import { createWorkItemsRouter } from './routes/work-items.js';
-import { createHealthRouter } from './routes/health.js';
-import { registerErrorMapper } from './middleware/typedErrorMapper.js';
-import { ReasonCode } from './errors/codes.js';
-import type { ErrorEnvelope } from './errors/types.js';
-
-// Optional deps allow tests to inject stub implementations without vi.mock()
-interface AppDeps {
-  service?: IWorkItemService;
-}
-
-// No resource access here — initDb() runs in server.ts, after this factory returns.
-// Integration tests call loadApp() directly and never touch the database (see
-// reference/service-database.md, "Startup Sequence").
-export async function loadApp(deps: AppDeps = {}) {
-  const app = Fastify({
-    logger: {
-      level: config.LOG_LEVEL,
-      transport:
-        config.NODE_ENV === 'development'
-          ? { target: 'pino-pretty' }
-          : undefined,
-    },
-  });
-
-  // ── Type provider ──────────────────────────────────────────────────────────
-  app.setValidatorCompiler(validatorCompiler);
-  app.setSerializerCompiler(serializerCompiler);
-
-  // ── Plugins ────────────────────────────────────────────────────────────────
-  await app.register(sensible);
-
-  // ── 404 + error handler ────────────────────────────────────────────────────
-  // setNotFoundHandler first, then registerErrorMapper — see reference/service-errors.md
-  // for the full ErrorEnvelope/ExtendableError model. No ad-hoc reply.status(4xx).send({...})
-  // anywhere in this file — that's the named anti-pattern; typedErrorMapper owns every status.
-  app.setNotFoundHandler((request, reply) => {
-    return reply.status(404).send({
-      success: false,
-      message: `Route ${request.method}:${request.url} not found`,
-      reason_code: ReasonCode.NotFound,
-    } satisfies ErrorEnvelope);
-  });
-  registerErrorMapper(app);
-
-  // ── Dependencies ───────────────────────────────────────────────────────────
-  // DrizzleWorkItemRepository takes no db — db is injected per call by the service
-  // (see reference/service-database.md, "Repository Signatures — DbClient Pattern").
-  const repository = new DrizzleWorkItemRepository(app.log);
-  const service = deps.service ?? new WorkItemService(repository, app.log);
-
-  // ── Routes ─────────────────────────────────────────────────────────────────
-  await app.register(createWorkItemsRouter({ service }), { prefix: '/api/v1' });
-
-  // ── Health probes ──────────────────────────────────────────────────────────
-  // Unprefixed (/live, /ready, /startup) — deliberately NOT under /api/v1. See
-  // reference/service-implementation.md, "Health Router", for why probes stay outside
-  // API versioning/auth/business middleware. checkDb is injected, not imported directly,
-  // so createHealthRouter itself never touches db.ts.
-  await app.register(createHealthRouter(checkDb));
-
-  return app;
-}
-```
-
-> `loadApp()` is exported so both `server.ts` and integration tests can build a fully-wired
-> Fastify instance without ever touching the database. This is the naming this skill's other
-> reference files (`service-database.md`, `service-lifecycle.md`, `SKILL.md`) already assume —
-> `app.ts`/`loadApp()`, not `main.ts`/`buildApp()`.
-> `createWorkItemsRouter({ service })` — deps as an object even though there's only one field
-> today — matches `WorkItemsRouterDeps`; `createHealthRouter(checkDb)` takes its one dependency
-> positionally instead, per the single-dependency exception documented alongside it.
-
----
-
-## src/server.ts
-
-See `reference/service-lifecycle.md` for the full entry-point implementation: `loadApp()` →
-`initDb()` → run pending migrations → `server.listen()`, plus the SIGTERM/SIGINT handler,
-force-exit timer, and `closeIdleConnections()`.
+See `reference/service-app.md` for the full `loadApp()` implementation (Fastify instance,
+type provider, plugin/middleware/hook wiring order, logger config) and `reference/service-lifecycle.md`
+for the full `server.ts` entry point (`loadApp()` → `initDb()` → migrations → `listen()`,
+SIGTERM/SIGINT handler, force-exit timer).
 
 > Migrations run in `server.ts`, **after** `initDb()` — never inside `loadApp()`. `loadApp()`
-> has no DB access at all (see `src/app.ts` above); running `migrate()` there would mean every
-> integration test needs a live database. The migrator import is
-> `drizzle-orm/node-postgres/migrator` — matching the `pg`/`node-postgres` driver this skill
-> uses (see `reference/service-database.md`), not `drizzle-orm/postgres-js/migrator`.
+> has no DB access at all; running `migrate()` there would mean every integration test needs a
+> live database. The migrator import is `drizzle-orm/node-postgres/migrator` — matching the
+> `pg`/`node-postgres` driver this skill uses (see `reference/service-database.md`), not
+> `drizzle-orm/postgres-js/migrator`.
 
 ---
 

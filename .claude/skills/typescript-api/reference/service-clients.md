@@ -184,6 +184,70 @@ export function registerErrorMapper(app: FastifyInstance): void {
 
 ---
 
+## Why This Shape (Design Principles)
+
+- **Model every way an upstream call can fail as a distinct error class extending
+  `ExtendableError`.** `GatewayError`, `NetworkError`, `UpstreamClientError`, and
+  `CredentialError` above aren't an arbitrary split — they're the exhaustive set of failure
+  modes a fetch to an upstream can produce (5xx, network/timeout, 4xx, our-own-bad-credential).
+  This taxonomy is what lets one mapper (`typedErrorMapper`) translate every failure into the
+  right HTTP status by class alone, with no per-call, per-route special-casing.
+
+- **Route handlers never `instanceof`-branch on upstream errors inline.** A handler calls the
+  service; the service calls `classifyUpstreamError()` in its `catch` and rethrows. The handler
+  itself does not catch, does not inspect `err instanceof GatewayError`, and does not construct
+  a response — it just lets the throw propagate:
+
+  ```typescript
+  // ✅ Route handler — no knowledge of Stripe, GatewayError, or any upstream-specific type
+  app.post('/charges', { schema: { body: ChargeRequestSchema } }, async (request) => {
+    return paymentService.charge(request.body.amount, request.body.currency);
+    // paymentService.charge() may throw GatewayError / NetworkError / UpstreamClientError /
+    // CredentialError / an unclassified bug — the handler treats all of them identically:
+    // it doesn't catch, so Fastify routes the throw to registerErrorMapper.
+  });
+
+  // ❌ Forbidden — branching on upstream error type inside the handler
+  app.post('/charges', ..., async (request, reply) => {
+    try {
+      return await paymentService.charge(request.body.amount, request.body.currency);
+    } catch (err) {
+      if (err instanceof GatewayError) return reply.status(502).send(...); // duplicates the mapper
+    }
+  });
+  ```
+
+  `throw` in a Fastify handler is the equivalent of Express's `next(err)` (see
+  `reference/service-errors.md`, "Route Handler Pattern") — it hands the error to the single
+  registered `setErrorHandler`, which is `registerErrorMapper`. That mapper is the **only**
+  place `instanceof` on an upstream error class is allowed to appear.
+
+- **The mapper falls through to the generic 500 for anything it doesn't recognize.** The final
+  branch in `registerErrorMapper` — `return reply.status(500).send({ ... InternalError })` —
+  is not a formality. It's what guarantees a genuine bug (a `TypeError` from your own code, a
+  `null` you forgot to guard) still surfaces as a plain 500 instead of being silently absorbed
+  or misreported as an upstream failure. If every branch above it is a specific `instanceof`
+  check, this fallback is reachable by construction: anything not explicitly classified drops
+  through to it, unmodified.
+
+- **Dependency-failure response bodies use the standard envelope — never a bespoke shape.**
+  `GatewayError`, `NetworkError`, and `UpstreamClientError` all render through `envelope(error)`,
+  the same `{ success, message, reason_code }` shape every domain error uses.
+  `CredentialError`'s branch constructs the envelope literally rather than via the helper, but
+  the shape is identical — it substitutes a generic message so credential details never leak,
+  it does not introduce a different response contract. No upstream-specific field (an HTTP
+  status name, a raw provider error code, a nested `{ upstream: {...} }` object) is ever added
+  to a dependency-failure body.
+
+- **Never swallow the unknown case.** `classifyUpstreamError()`'s last line — `throw err as
+  Error` — rethrows an unrecognized error completely unchanged: same type, same message, same
+  stack trace. It does not wrap it in `GatewayError`, does not log-and-return `null`, and does
+  not resolve to a default value. Wrapping an unknown error would convert "our code has a bug"
+  into "the upstream is down," destroying the one signal that would otherwise point at the real
+  cause. See Forbidden Patterns below for the two ways this rule gets violated in practice.
+
+---
+
 ## Typed Request Helper
 
 One file per upstream. The private `request<T>()` helper handles the fetch lifecycle, timeout, and error classification. Per-operation raw functions call it with typed return values.

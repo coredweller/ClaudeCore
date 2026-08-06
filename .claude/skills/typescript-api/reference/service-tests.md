@@ -244,6 +244,19 @@ import Fastify from 'fastify';
 import { createHealthRouter } from '../../src/routes/health.js';
 
 describe('createHealthRouter', () => {
+  it('GET / returns 200 without calling checkDb', async () => {
+    const checkDb = async (): Promise<boolean> => {
+      throw new Error('checkDb should never be called for /');
+    };
+    const app = Fastify();
+    await app.register(createHealthRouter(checkDb));
+
+    const response = await app.inject({ method: 'GET', url: '/' });
+
+    expect(response.statusCode).toBe(200);
+    await app.close();
+  });
+
   it('GET /live returns 200 without calling checkDb', async () => {
     const checkDb = async (): Promise<boolean> => {
       throw new Error('checkDb should never be called for /live');
@@ -279,7 +292,7 @@ describe('createHealthRouter', () => {
 });
 ```
 
-> The first test's `checkDb` throws if called at all — that's the assertion. `/live` (and
+> The first test's `checkDb` throws if called at all — that's the assertion. `/` (and `/live`,
 > `/startup`) must never await the dependency; if a future edit accidentally makes them call
 > `checkDb()`, this test fails loudly instead of just becoming slightly slower.
 
@@ -444,7 +457,7 @@ describe('DELETE /api/v1/workitems/:id', () => {
 > serialization, `registerErrorMapper`) without binding a real TCP port.
 > `loadApp({ service })` injects the stub via the `AppDeps` interface — no `vi.mock()`
 > or module graph hacking, and no database: `loadApp()` never calls `initDb()` (see
-> `reference/service-config.md`, `src/app.ts`). Tests are coupled to `IWorkItemService`,
+> `reference/service-app.md`). Tests are coupled to `IWorkItemService`,
 > not to the concrete `DrizzleWorkItemRepository` or the `db` module.
 > Service stubs reject with the actual `ExtendableError` subclass the real service would
 > throw (`NotFoundError`, `DomainValidationError`) — `registerErrorMapper` maps the thrown

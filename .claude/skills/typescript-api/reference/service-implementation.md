@@ -304,9 +304,9 @@ export function createWorkItemsRouter(deps: WorkItemsRouterDeps): FastifyPluginC
 
 ## Health Router — `src/routes/health.ts`
 
-Three K8s probes, one factory. `checkDb` is the only dependency, so it's a positional
-parameter — not wrapped in a deps object the way `WorkItemsRouterDeps` is for routers with
-one or more DB-backed dependencies.
+Three K8s probes plus the root route, one factory. `checkDb` is the only dependency, so it's a
+positional parameter — not wrapped in a deps object the way `WorkItemsRouterDeps` is for
+routers with one or more DB-backed dependencies.
 
 ```typescript
 import { readFileSync } from 'node:fs';
@@ -322,6 +322,13 @@ type CheckDbFn = () => Promise<boolean>;
 
 export function createHealthRouter(checkDb: CheckDbFn): FastifyPluginCallbackZod {
   return function (app, _opts, done) {
+    // Root — GET / with no dependency check. Not a K8s probe: it exists because external
+    // uptime monitors, load balancer default health checks, and a human opening the base URL
+    // in a browser all hit `/` before they hit anything else. Same "no dependency" answer as
+    // liveness, registered here rather than a dedicated router because it shares every
+    // characteristic /live already has — no reason to stand up a second factory for it.
+    app.get('/', () => ({ status: 'ok', version: APP_VERSION }));
+
     // Liveness — is the process itself alive? Never touches the DB: if the DB is briefly
     // unreachable, the process should NOT be killed and restarted — that doesn't fix a DB
     // outage, it just adds pod-churn on top of it.
@@ -351,8 +358,8 @@ export function createHealthRouter(checkDb: CheckDbFn): FastifyPluginCallbackZod
 }
 ```
 
-> Mounted unprefixed (`/live`, `/ready`, `/startup`) — not under `/api/v1` — see
-> `reference/service-config.md`, `src/app.ts`. K8s probes shouldn't depend on API versioning,
+> Mounted unprefixed (`/`, `/live`, `/ready`, `/startup`) — not under `/api/v1` — see
+> `reference/service-app.md`, "Middleware / Plugin Wiring Order". K8s probes shouldn't depend on API versioning,
 > auth, or any business-route middleware; keeping them outside the prefix means a future
 > change to `/api/v1` (auth requirement, rate limiting, a version bump) can never accidentally
 > break the probes an orchestrator restarts the pod over.

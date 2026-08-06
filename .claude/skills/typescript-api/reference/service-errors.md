@@ -49,28 +49,6 @@ export interface ValidationErrorEnvelope extends ErrorEnvelope {
 
 ---
 
-## reason_code Registry — `src/errors/codes.ts`
-
-```typescript
-// Assign codes per logical group. Each value is a distinct number literal.
-export const ReasonCode = {
-  // 1xxx — domain / client errors
-  NotFound:         1001,
-  ValidationFailed: 1002,
-  Conflict:         1003,
-  // 5xxx — infrastructure / server errors
-  InternalError:    5000,
-  UpstreamFailure:  5001,
-} as const;
-
-export type ReasonCode = (typeof ReasonCode)[keyof typeof ReasonCode];
-```
-
-> `as const` makes every value a literal type (`1001`, not `number`). When the error class
-> is known, `err.reason_code` narrows to the exact literal — useful in discriminated switches.
-
----
-
 ## ExtendableError Base — `src/errors/ExtendableError.ts`
 
 ```typescript
