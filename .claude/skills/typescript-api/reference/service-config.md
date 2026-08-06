@@ -7,21 +7,21 @@ my-api/
 ├── package.json
 ├── tsconfig.json                 # Build config — src/ only, outputs to dist/
 ├── tsconfig.test.json            # Type-check config — includes src/ + test/ for ESLint
-├── vitest.config.ts              # Vitest config — coverage provider, test environment
-├── eslint.config.js              # ESLint 9 flat config (root rules + a test-scoped override block)
-├── .prettierrc.json              # Prettier formatting config
+├── vitest.config.ts
+├── eslint.config.js              # ESLint 9 flat config (root rules + test-scoped override)
+├── .prettierrc.json
 ├── .prettierignore               # dist/, migrations/ — generated output, not source
 ├── .env.example
-├── drizzle.config.ts             # Drizzle Kit configuration
+├── drizzle.config.ts
 ├── src/
-│   ├── app.ts                    # loadApp() factory — plugins, error mapper, routes; no resource access
-│   ├── server.ts                 # Entry point — loadApp() → initDb() → listen(); SIGTERM/SIGINT handler
+│   ├── app.ts                    # loadApp() factory — plugins, error mapper, routes
+│   ├── server.ts                 # Entry point — loadApp() → initDb() → listen(); signals
 │   ├── config.ts                 # Zod-validated env config (fails fast at startup)
-│   ├── logger.ts                 # Shared Pino singleton — see reference/service-app.md
-│   ├── db.ts                     # initDb()/getDb()/closeDb() lifecycle — not a module-level singleton
+│   ├── logger.ts                 # Shared Pino singleton
+│   ├── db.ts                     # initDb()/getDb()/closeDb() — not a module-level singleton
 │   ├── routes/
-│   │   ├── work-items.ts         # createWorkItemsRouter(deps) — see reference/service-implementation.md
-│   │   └── health.ts             # createHealthRouter(checkDb) — /live, /ready, /startup
+│   │   ├── work-items.ts         # createWorkItemsRouter(deps)
+│   │   └── health.ts             # createHealthRouter(checkDb) — /, /live, /ready, /startup
 │   ├── services/
 │   │   ├── work-item.service.ts
 │   │   └── work-item.service.interface.ts
@@ -31,22 +31,21 @@ my-api/
 │   ├── domain/
 │   │   ├── work-item.ts          # Aggregate + branded ID + factory
 │   │   └── errors.ts             # Result<T>/ok/fail — optional, internal use only
-│   ├── errors/                   # ExtendableError subclasses + envelope — see reference/service-errors.md
+│   ├── errors/                   # ExtendableError subclasses + envelope
 │   │   ├── ExtendableError.ts
-│   │   ├── codes.ts              # reason_code registry
-│   │   ├── types.ts              # ErrorEnvelope + ValidationErrorEnvelope
-│   │   ├── domain.ts             # NotFoundError, DomainValidationError, ConflictError
-│   │   └── helpers.ts            # sendValidationError()
+│   │   ├── codes.ts
+│   │   ├── types.ts
+│   │   ├── domain.ts
+│   │   └── helpers.ts
 │   ├── middleware/
-│   │   └── typedErrorMapper.ts   # registerErrorMapper — see reference/service-errors.md
-│   ├── validation/                # OPTIONAL — Shape A parse-and-throw requests, see service-errors.md
+│   │   └── typedErrorMapper.ts
+│   ├── validation/               # OPTIONAL — Shape A parse-and-throw requests
 │   │   └── update-work-item-request.ts
-│   ├── validation-schema/         # Zod schemas (HTTP layer) — see service-implementation.md
-│   │   └── work-items.schema.ts  # *Schema naming + inferred types
-│   └── schema/                    # Drizzle table definitions (DB layer) — see service-database.md
-│       └── work-items.schema.ts  # Drizzle table schema — same filename, different directory:
-│                                  # validation-schema/ (Zod, HTTP) vs schema/ (Drizzle, DB)
-├── migrations/                   # drizzle-kit generated SQL files
+│   ├── validation-schema/        # Zod schemas (HTTP layer)
+│   │   └── work-items.schema.ts
+│   └── schema/                   # Drizzle table definitions (DB layer) — same filename,
+│       └── work-items.schema.ts  # different directory; the import path names the layer
+├── migrations/                   # drizzle-kit generated SQL
 └── test/
     ├── unit/
     │   └── work-item.service.test.ts
@@ -55,6 +54,8 @@ my-api/
 Dockerfile
 docker-compose.yml
 ```
+
+Which reference file owns each of these: see the Reference Files table in `SKILL.md`.
 
 ---
 
@@ -108,28 +109,18 @@ docker-compose.yml
 }
 ```
 
-> **Every dependency is pinned to an exact version — no `^` or `~`.** A caret range lets
-> `npm install` (a fresh clone, a CI cache miss, a Docker layer rebuild) silently resolve to a
-> newer minor/patch than what was last tested, even with a committed `package-lock.json` present
-> — `npm ci` respects the lockfile, but any workflow that runs a bare `npm install` (or a dependency
-> gets manually re-resolved) can drift. Exact pins make every version bump an explicit, reviewable
-> line in a diff instead of a transparent side effect of installing.
+> **Exact pins — no `^` or `~`.** A caret range lets any bare `npm install` (fresh clone, CI
+> cache miss, Docker layer rebuild) resolve a newer minor than what was last tested; `npm ci`
+> respects the lockfile but not every workflow uses it. Exact pins make each bump a reviewable
+> diff line.
 >
-> **Versions above were verified against the npm registry, not carried over unchanged.** Each is
-> the highest release within the major version this skill already documents and depends on in
-> prose elsewhere (Fastify v5, Zod v3, ESLint 9 flat config, `typescript-eslint` v8, Vitest 3,
-> TypeScript 5.x) — jumping any of these to the newest major available on the registry (Zod 4,
-> ESLint 10, Vitest 4, TypeScript 7, `fastify-type-provider-zod` 7) was deliberately rejected:
-> `typescript-eslint@8.66.0`'s peer range is `typescript: '>=4.8.4 <6.1.0'`, so TypeScript 7 would
-> break linting outright, and the other majors would invalidate the version-specific explanations
-> written throughout this file (e.g. "ESLint 9 uses flat config"). `@vitest/coverage-v8` MUST
-> match `vitest`'s version exactly — its own `peerDependencies` pins `vitest` to the identical
-> version string, not a range. Re-verify and bump deliberately; don't assume these stay current.
->
-> No `killport`-style process-killing script is included — none of the commands above bind a
-> port outside of `dev`/`start`, and `tsx watch` / the runtime process own their own lifecycle.
-> If a workflow needs to free a stuck port, that's a one-off shell command, not a maintained
-> `package.json` script.
+> **Constraints when bumping.** `@vitest/coverage-v8` MUST equal `vitest` exactly — its own
+> peer range pins the identical version string, not a range. `typescript-eslint@8`'s peer range
+> is `typescript >=4.8.4 <6.1.0`, so TypeScript 7 breaks linting. The versions above are the
+> highest release within each major this skill documents in prose (Fastify v5, Zod v3, ESLint 9
+> flat config, typescript-eslint v8, Vitest 3, TS 5.x); moving a major invalidates
+> version-specific explanations elsewhere in this file. Re-verify against the registry — don't
+> assume these stay current.
 
 ---
 
@@ -162,15 +153,10 @@ docker-compose.yml
 }
 ```
 
-> `noUncheckedIndexedAccess` adds `undefined` to array index access returns — prevents
-> off-by-one crashes at runtime. `exactOptionalPropertyTypes` disallows assigning `undefined`
-> to an optional property explicitly — catches accidental overwrites.
->
-> `rootDir: "src"` and `include: ["src"]` restrict the build to source files only.
-> Tests are excluded so they don't end up in `dist/`. See `tsconfig.test.json` for the
-> type-check config that covers `test/` — used by ESLint's `projectService`.
-
----
+> `noUncheckedIndexedAccess` adds `undefined` to array index access — prevents off-by-one
+> crashes at runtime. `exactOptionalPropertyTypes` disallows explicitly assigning `undefined`
+> to an optional property — catches accidental overwrites. `rootDir`/`include` restrict the
+> build to source so tests never land in `dist/`.
 
 ## tsconfig.test.json
 
@@ -186,10 +172,8 @@ docker-compose.yml
 }
 ```
 
-> Extends the build tsconfig but widens `rootDir` to `.` so `test/` files are in scope.
-> `noEmit: true` overrides the build config — this file is **never** used to produce output.
-> ESLint's `projectService` uses `allowDefaultProject` + `defaultProject: 'tsconfig.test.json'`
-> to type-check test files — see `eslint.config.js` template for the required configuration.
+> Widens `rootDir` to `.` so `test/` is in scope; `noEmit` means this config never produces
+> output. ESLint's `projectService` uses it to type-check test files (see `eslint.config.js`).
 
 ---
 
@@ -211,18 +195,13 @@ export default defineConfig({
 });
 ```
 
-> Vitest resolves `.js` extension imports to `.ts` source files automatically — no alias
-> config required. The `environment: 'node'` setting ensures `crypto.randomUUID()` and
-> other Node globals are available in tests. Coverage is scoped to `src/` only; test
-> files are excluded from coverage reports.
+> Vitest resolves `.js` extension imports to `.ts` sources automatically — no alias config.
+> `environment: 'node'` makes `crypto.randomUUID()` and other Node globals available.
 >
-> `restoreMocks: true` calls `vi.restoreAllMocks()` before every test — prevents a mock's
-> call history or return-value override in one test from leaking into the next. **Gotcha:**
-> for a `vi.fn()` created inside a `vi.mock('./x.js', () => ({ ... }))` factory, "restore"
-> doesn't mean "back to the factory's initial implementation" — there is no original to
-> restore to, so it reverts to a no-op returning `undefined`. Any test after the first one
-> in a file that relies on that mock's return value breaks silently unless it's re-armed. See
-> `reference/service-tests.md` for the `beforeEach` pattern this requires.
+> `restoreMocks: true` calls `vi.restoreAllMocks()` before every test, preventing call history
+> or return-value overrides from leaking between tests. **It has a sharp edge with
+> `vi.mock()`-factory mocks** — they revert to a no-op, not to the factory's implementation. See
+> `reference/service-tests.md` for the `beforeEach` re-arm this requires.
 
 ---
 
@@ -237,8 +216,11 @@ import { z } from 'zod';
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(3000),
-  DATABASE_URL: z.string().min(1),
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
+  DATABASE_URL: z.string().min(1),
+  DB_POOL_MAX: z.coerce.number().int().positive().default(10),
+  DB_IDLE_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
+  DATABASE_SSL: z.coerce.boolean().default(false),
 });
 
 // Throws at startup if required env vars are missing or invalid.
@@ -246,19 +228,22 @@ const envSchema = z.object({
 export const config = envSchema.parse(process.env);
 export type Config = z.infer<typeof envSchema>;
 
-// One entry per schema key, no more, no less — `Record<keyof Config, …>` makes an omission
-// a compile error instead of a runtime gap. Anything holding a credential, token, or secret
-// (DATABASE_URL embeds a Postgres password) MUST be `sensitive: true`.
+// One entry per schema key, no more, no less — Record<keyof Config, …> makes an omission a
+// compile error instead of a runtime gap. Anything holding a credential, token, or secret
+// (DATABASE_URL embeds a Postgres password) MUST be sensitive: true.
 const fieldMeta: Record<keyof Config, { sensitive: boolean }> = {
   NODE_ENV: { sensitive: false },
   PORT: { sensitive: false },
-  DATABASE_URL: { sensitive: true },
   LOG_LEVEL: { sensitive: false },
+  DATABASE_URL: { sensitive: true },
+  DB_POOL_MAX: { sensitive: false },
+  DB_IDLE_TIMEOUT_MS: { sensitive: false },
+  DATABASE_SSL: { sensitive: false },
 };
 
-// Redacted view of `config` — the ONLY form of config allowed in logs, health/debug endpoints,
-// or any *.json output. Never `JSON.stringify(config)` or pass `config` itself to a logger;
-// that bypasses redaction and leaks credentials into log aggregators or served JSON.
+// Redacted view of `config` — the ONLY form allowed in logs, health/debug endpoints, or any
+// *.json output. Never JSON.stringify(config) or pass `config` itself to a logger; that
+// bypasses redaction and leaks credentials into log aggregators or served JSON.
 export function getProperties(): Record<string, unknown> {
   return Object.fromEntries(
     Object.entries(config).map(([key, value]) => [
@@ -269,54 +254,34 @@ export function getProperties(): Record<string, unknown> {
 }
 ```
 
-> Import `config` everywhere instead of reading `process.env` directly.
-> The parse call throws a `ZodError` at startup — crashes loudly before serving a single request.
->
-> `getProperties()` exists so credentials never appear in `*.json` config files or log output:
-> anywhere config needs to be serialized, dumped, or logged — a debug endpoint, a startup log
-> line, a support bundle — call `getProperties()`, never `config` directly. Adding a new env var
-> to `envSchema` without adding a matching `fieldMeta` entry fails `tsc`, not a code review.
+> This is the single canonical env schema — the optional references (`service-clients.md`,
+> `service-observability.md`) list the keys they add to it. Adding a key without a matching
+> `fieldMeta` entry fails `tsc`, not code review. `DATABASE_SSL=true` uses
+> `{ rejectUnauthorized: true }` in `db.ts` — a real certificate check; fix a bad cert or CA
+> bundle rather than weakening it.
 
----
+## .env.example
 
-## src/db.ts
-
-See `reference/service-database.md` for the full `initDb()/getDb()/closeDb()` implementation,
-`DbClient = Db | TX` type definition, DB config env vars with TLS defaults, and forbidden patterns.
-
----
-
-## src/app.ts and src/server.ts
-
-See `reference/service-app.md` for the full `loadApp()` implementation (Fastify instance,
-type provider, plugin/middleware/hook wiring order, logger config) and `reference/service-lifecycle.md`
-for the full `server.ts` entry point (`loadApp()` → `initDb()` → migrations → `listen()`,
-SIGTERM/SIGINT handler, force-exit timer).
-
-> Migrations run in `server.ts`, **after** `initDb()` — never inside `loadApp()`. `loadApp()`
-> has no DB access at all; running `migrate()` there would mean every integration test needs a
-> live database. The migrator import is `drizzle-orm/node-postgres/migrator` — matching the
-> `pg`/`node-postgres` driver this skill uses (see `reference/service-database.md`), not
-> `drizzle-orm/postgres-js/migrator`.
-
----
-
-## src/schema/work-items.schema.ts
-
-```typescript
-import { pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
-
-export const workItems = pgTable('work_items', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  title: text('title').notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
-
-export type WorkItemRow = typeof workItems.$inferSelect;
-export type NewWorkItemRow = typeof workItems.$inferInsert;
+```dotenv
+NODE_ENV=development
+PORT=3000
+LOG_LEVEL=debug
+DATABASE_URL=postgres://myapi:secret@localhost:5432/myapi_dev
+DB_POOL_MAX=10
+DB_IDLE_TIMEOUT_MS=30000
+DATABASE_SSL=false
 ```
+
+---
+
+## Other Core Source Files
+
+| File | Reference |
+|------|-----------|
+| `src/db.ts` | `reference/service-database.md` — `initDb()/getDb()/closeDb()`, `DbClient`, forbidden patterns |
+| `src/app.ts` | `reference/service-app.md` — `loadApp()`, plugin/hook wiring order, logger |
+| `src/server.ts` | `reference/service-lifecycle.md` — entry point, migrations, SIGTERM/SIGINT |
+| `src/schema/*.schema.ts` | `reference/service-database.md` — Drizzle tables, schema-as-code conventions |
 
 ---
 
@@ -325,11 +290,9 @@ export type NewWorkItemRow = typeof workItems.$inferInsert;
 ```typescript
 import { defineConfig } from 'drizzle-kit';
 
-// Read DATABASE_URL directly — do NOT import src/config.js here.
-// src/config.js executes z.parse(process.env) at import time, which requires
-// ALL app env vars (NODE_ENV, LOG_LEVEL, PORT, …). drizzle-kit only needs
-// DATABASE_URL, so importing config would crash CI migration jobs that only
-// have the DB URL in scope.
+// Read DATABASE_URL directly — do NOT import src/config.js here. It runs
+// z.parse(process.env) at import time, requiring ALL app env vars; drizzle-kit only
+// needs DATABASE_URL, so importing config would crash CI migration jobs.
 const databaseUrl = process.env['DATABASE_URL'];
 if (!databaseUrl) {
   throw new Error('DATABASE_URL environment variable is required for drizzle-kit');
@@ -347,10 +310,10 @@ export default defineConfig({
 });
 ```
 
-> `process.env['DATABASE_URL']` is safe under `noUncheckedIndexedAccess` — the string
-> key returns `string | undefined`, and the guard above narrows it to `string` before use.
-> Never import `src/config.js` from tooling configs (`drizzle.config.ts`, `vitest.config.ts`,
-> `eslint.config.js`) — these run outside the app process and cannot satisfy the full env schema.
+> Never import `src/config.js` from a tooling config (`drizzle.config.ts`, `vitest.config.ts`,
+> `eslint.config.js`) — these run outside the app process and can't satisfy the full env schema.
+> `process.env['DATABASE_URL']` is safe under `noUncheckedIndexedAccess`: it returns
+> `string | undefined` and the guard narrows it.
 
 ---
 
@@ -361,7 +324,7 @@ export default defineConfig({
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  // ── Root rules: apply to all source and test TypeScript files ──────────────
+  // ── Root rules: all source and test TypeScript files ───────────────────────
   {
     files: ['src/**/*.ts', 'test/**/*.ts'],
     extends: [
@@ -370,9 +333,9 @@ export default tseslint.config(
     languageOptions: {
       parserOptions: {
         projectService: {
-          // `tsconfig.test.json` is not named `tsconfig.json`, so TypeScript's project
-          // service won't find it by directory traversal. `allowDefaultProject` covers
-          // test files that fall through, and `defaultProject` points to the test config.
+          // tsconfig.test.json is not named tsconfig.json, so the project service won't
+          // find it by directory traversal. allowDefaultProject covers test files that
+          // fall through; defaultProject points at the test config.
           allowDefaultProject: ['*.js', 'test/*/*.ts'],
           defaultProject: 'tsconfig.test.json',
         },
@@ -380,49 +343,39 @@ export default tseslint.config(
       },
     },
     rules: {
-      // Enforce `import type` for type-only imports (keeps runtime bundle clean)
+      // Enforce `import type` for type-only imports (keeps the runtime bundle clean)
       '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports' }],
       // Ban explicit `any` — use `unknown` and narrow instead
       '@typescript-eslint/no-explicit-any': 'error',
       // Unused vars are bugs; prefix with _ to intentionally ignore
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
-      // Prefer `Promise<void>` return over floating promises
       '@typescript-eslint/no-floating-promises': 'error',
     },
   },
-  // ── Test-scoped overrides: rules that only make sense inside test/ ─────────
-  // In test files vi.fn() mocks have no real `this` binding — unbound-method is a false positive.
-  // @vitest/eslint-plugin would handle this automatically; we replicate its behaviour here.
+  // ── Test-scoped override ───────────────────────────────────────────────────
+  // vi.fn() mocks have no real `this` binding — unbound-method is a false positive here.
   {
     files: ['test/**/*.ts'],
     rules: {
       '@typescript-eslint/unbound-method': 'off',
     },
   },
-  // Always ignore compiled output and deps
   {
     ignores: ['dist/**', 'node_modules/**'],
   },
 );
 ```
 
-> ESLint 9 uses **flat config** (`eslint.config.js`) — no `.eslintrc` files. This is a single
-> exported array, not one file per scope: **do not** create `.eslintrc.js` (root) or
-> `tests/.eslintrc.js` files — ESLint 9 never loads them, and their presence next to a working
-> `eslint.config.js` is dead config that silently does nothing. The "root vs. tests" split
-> those legacy filenames implied is expressed above as two config objects in the same array:
-> the first block (`files: ['src/**/*.ts', 'test/**/*.ts']`) is the root ruleset, the second
-> (`files: ['test/**/*.ts']`) is the test-scoped override — same separation of concerns,
-> flat-config idiom.
+> ESLint 9 is **flat config only** — never create `.eslintrc.js` or `test/.eslintrc.js`;
+> ESLint 9 doesn't load them and they become dead config. The legacy "root vs. tests" file split
+> is expressed above as two objects in the same exported array.
 >
-> `typescript-eslint` is the unified v8 package that replaces the separate
-> `@typescript-eslint/parser` + `@typescript-eslint/eslint-plugin` pair.
-> `recommendedTypeChecked` enables rules that require type information (e.g. `no-floating-promises`) —
-> this requires `parserOptions.projectService` to work. `projectService: true` is NOT sufficient
-> here — `tsconfig.test.json` has a non-standard name so the service won't find it by traversal;
-> `allowDefaultProject` + `defaultProject` are required.
-> `allowDefaultProject` must NOT use `**` (banned for performance); use `test/*/*.ts` to cover
-> the standard `test/unit/` and `test/integration/` layout.
+> `typescript-eslint` v8 is the unified package replacing the `@typescript-eslint/parser` +
+> `@typescript-eslint/eslint-plugin` pair. `recommendedTypeChecked` needs type information, so
+> `parserOptions.projectService` is required — and plain `projectService: true` is **not**
+> sufficient given `tsconfig.test.json`'s non-standard name. `allowDefaultProject` must not use
+> `**` (banned for performance); `test/*/*.ts` covers the standard `test/unit/` +
+> `test/integration/` layout.
 
 ---
 
@@ -445,23 +398,9 @@ dist
 migrations
 ```
 
-> `singleQuote` matches the quote style already implied by the ESLint rules above; keeping
-> Prettier and ESLint aligned avoids the two tools fighting over the same line. Prettier owns
-> formatting only — none of the ESLint rules in `eslint.config.js` are stylistic/formatting
-> rules, so there's no rule overlap to disable. `dist/` and `migrations/` are generated output,
-> not hand-written source — formatting them is wasted work and risks rewriting a drizzle-kit
-> migration file byte-for-byte on every run.
-
----
-
-## .env.example
-
-```dotenv
-NODE_ENV=development
-PORT=3000
-DATABASE_URL=postgres://myapi:secret@localhost:5432/myapi_dev
-LOG_LEVEL=debug
-```
+> Prettier owns formatting only — no ESLint rule above is stylistic, so there's no overlap to
+> disable. `dist/` and `migrations/` are generated; formatting them risks rewriting a
+> drizzle-kit migration byte-for-byte on every run.
 
 ---
 
@@ -496,8 +435,8 @@ EXPOSE 3000
 ENTRYPOINT ["node", "dist/server.js"]
 ```
 
-> Two-stage build: the `build` stage type-checks before compiling — a bad type is a
-> failed image. The `runtime` stage installs only production deps, keeping the image small.
+> The `build` stage type-checks before compiling — a bad type is a failed image. The `runtime`
+> stage installs production deps only.
 
 ---
 
@@ -541,5 +480,5 @@ volumes:
   pgdata:
 ```
 
-> `service_healthy` on the `db` dependency prevents the app from starting before
-> PostgreSQL is accepting connections. Without this, the app crashes on first DB call.
+> `service_healthy` prevents the app from starting before PostgreSQL accepts connections —
+> without it, `initDb()`'s fail-fast check crashes the container on first boot.

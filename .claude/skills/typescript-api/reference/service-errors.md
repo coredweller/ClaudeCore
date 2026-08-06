@@ -8,9 +8,11 @@ Every error response — 4xx and 500 — uses one envelope:
 { "success": false, "message": "...", "reason_code": 1001 }
 ```
 
-The one sanctioned extension is `validation_errors: ZodIssue[]` on validation failures. No other field is added to the envelope.
+The one sanctioned extension is `validation_errors: ZodIssue[]` on validation failures. No other
+field is ever added.
 
-**The named anti-pattern:** ad-hoc `reply.status(4xx).send({ type, title, status, ... })` in route handlers. See Forbidden Patterns.
+**The named anti-pattern:** ad-hoc `reply.status(4xx).send({ type, title, status, ... })` in
+route handlers. See Forbidden Patterns.
 
 ---
 
@@ -20,19 +22,20 @@ The one sanctioned extension is `validation_errors: ZodIssue[]` on validation fa
 src/
 ├── errors/
 │   ├── ExtendableError.ts      # abstract base class
-│   ├── codes.ts                # reason_code registry (const enum-like)
+│   ├── codes.ts                # reason_code registry
 │   ├── types.ts                # ErrorEnvelope + ValidationErrorEnvelope
 │   ├── domain.ts               # NotFoundError, DomainValidationError, ConflictError
 │   └── helpers.ts              # sendValidationError()
 └── middleware/
-    └── typedErrorMapper.ts     # Fastify setErrorHandler — class → status, no per-route instanceof
+    └── typedErrorMapper.ts     # Fastify setErrorHandler — class → status
 ```
 
 ---
 
-## Error Envelope — `src/errors/types.ts`
+## Envelope and Base Class
 
 ```typescript
+// src/errors/types.ts
 import type { ZodIssue } from 'zod';
 
 export interface ErrorEnvelope {
@@ -47,11 +50,8 @@ export interface ValidationErrorEnvelope extends ErrorEnvelope {
 }
 ```
 
----
-
-## ExtendableError Base — `src/errors/ExtendableError.ts`
-
 ```typescript
+// src/errors/ExtendableError.ts
 export abstract class ExtendableError extends Error {
   abstract readonly reason_code: number;
 
@@ -63,6 +63,21 @@ export abstract class ExtendableError extends Error {
     Object.setPrototypeOf(this, new.target.prototype);
   }
 }
+```
+
+---
+
+```typescript
+// src/errors/codes.ts — the one registry; never inline a numeric literal at a throw site
+export const ReasonCode = {
+  // 1xxx — domain errors
+  NotFound:         1001,
+  ValidationFailed: 1002,
+  Conflict:         1003,
+  // 5xxx — infrastructure / server errors
+  InternalError:    5000,
+  UpstreamFailure:  5001,
+} as const;
 ```
 
 ---
@@ -101,14 +116,16 @@ export class ConflictError extends ExtendableError {
 }
 ```
 
-> `reason_code = ReasonCode.X as const` gives each property a **literal type** (`1001`),
-> not `number`. This is what enables TypeScript to narrow `reason_code` in type guards.
+> `reason_code = ReasonCode.X as const` gives each property a **literal type** (`1001`), not
+> `number` — that's what lets TypeScript narrow `reason_code` in type guards.
 
 ---
 
 ## typedErrorMapper — `src/middleware/typedErrorMapper.ts`
 
-Registered once in `loadApp()` after `setNotFoundHandler`. This is the **only** place that maps error class to HTTP status. No route handler contains `instanceof` or status logic.
+Registered once in `loadApp()` after `setNotFoundHandler` (see `reference/service-app.md` for
+the surrounding wiring). This is the **only** place that maps error class to HTTP status — no
+route handler contains `instanceof` or status logic.
 
 ```typescript
 import type { FastifyInstance } from 'fastify';
@@ -139,7 +156,9 @@ export function registerErrorMapper(app: FastifyInstance): void {
       return reply.status(409).send(envelope(error));
     }
 
-    // Fallback — 500
+    // Fallback — 500. Not a formality: this is what guarantees a genuine bug (a TypeError
+    // from your own code, an unguarded null) still surfaces as a plain 500 instead of being
+    // absorbed or misreported. Anything not explicitly classified above drops through here.
     return reply.status(500).send({
       success: false,
       message: 'Internal server error',
@@ -149,29 +168,14 @@ export function registerErrorMapper(app: FastifyInstance): void {
 }
 ```
 
-Register in `src/app.ts`:
-
-```typescript
-// src/app.ts — inside loadApp()
-
-// 404 for unknown routes — uses envelope so the shape is consistent
-app.setNotFoundHandler((request, reply) => {
-  return reply.status(404).send({
-    success: false,
-    message: `Route ${request.method}:${request.url} not found`,
-    reason_code: ReasonCode.NotFound,
-  } satisfies ErrorEnvelope);
-});
-
-// Typed error mapper — after the 404 handler, handles all thrown errors
-registerErrorMapper(app);
-```
+> A service proxying an upstream HTTP API adds four more branches to this function — see
+> `reference/service-clients.md`.
 
 ---
 
 ## Route Handler Pattern
 
-Handlers **throw** custom error classes. They never construct error responses directly.
+Handlers **throw** custom error classes. They never construct error responses.
 
 ```typescript
 // ✅ Correct — throw; typedErrorMapper owns status + envelope
@@ -182,23 +186,21 @@ app.get('/workitems/:id', { schema: { params: WorkItemIdParamSchema } }, async (
 });
 ```
 
-`throw err` is the Fastify equivalent of Express's `next(err)` — Fastify routes the thrown
-error to `setErrorHandler` (the typedErrorMapper) automatically.
+`throw err` is the Fastify equivalent of Express's `next(err)` — Fastify routes the thrown error
+to `setErrorHandler` automatically.
 
 ---
 
 ## Two Accepted Validation Shapes
 
-Both apply when automatic Fastify/Zod validation isn't enough — cross-field rules, partial
-updates, a shape that doesn't map cleanly onto `{ schema: { body: ... } }`. Pick one per
-handler; **either way, raw Zod never appears in the handler body** — no inline
-`SomeSchema.parse(...)` or `.safeParse(...)` call written directly in a route function.
+Both apply only when automatic Fastify/Zod validation isn't enough — cross-field rules, partial
+updates, a shape that doesn't map cleanly onto `{ schema: { body: ... } }`. Pick one per handler;
+**either way, raw Zod never appears in the handler body.**
 
 ### Shape A — parse-and-throw: `src/validation/<feature>-request.ts`
 
-A hand-written parser function: takes `unknown`, returns a typed DTO on success, throws
-`DomainValidationError` on failure. The handler never branches on success/failure itself —
-same throw-based shape as every other failure path in this skill.
+Takes `unknown`, returns a typed DTO, throws `DomainValidationError` on failure. The handler
+never branches — same throw-based shape as every other failure path in this skill.
 
 ```typescript
 // src/validation/update-work-item-request.ts
@@ -222,12 +224,6 @@ export function parseUpdateWorkItemRequest(input: unknown): UpdateWorkItemReques
 }
 ```
 
-Usage — no branching in the handler; `typedErrorMapper` handles the throw exactly like any
-other domain error. `PATCH`/`service.update()` are illustrative here — the canonical
-`IWorkItemService` (`reference/service-domain.md`) only has `listAll`/`getById`/`create`/`delete`;
-this shows the pattern for a feature that needs partial-update validation, not a claim that
-`update` exists on the running example:
-
 ```typescript
 app.patch('/workitems/:id', ..., async (request) => {
   const dto = parseUpdateWorkItemRequest(request.body); // throws DomainValidationError → 400
@@ -235,16 +231,17 @@ app.patch('/workitems/:id', ..., async (request) => {
 });
 ```
 
-### Shape B — safeParse + sendValidationError: `src/validation-schema/<feature>.schema.ts`
+> `PATCH`/`service.update()` are illustrative — the canonical `IWorkItemService`
+> (`reference/service-domain.md`) has only `listAll`/`getById`/`create`/`delete`.
 
-`sendValidationError` (`src/errors/helpers.ts`) is the one sanctioned way to reply inline for
-a validation failure — a naked `reply.status(400).send({...})` in a handler is the anti-pattern
-it exists to prevent. The schema itself lives in the feature's `validation-schema/` file
-(`*Schema` naming, inferred type exported — see `reference/service-implementation.md`), and the
-handler calls `.safeParse()` directly, short-circuiting with `sendValidationError()` on failure
-instead of throwing.
+### Shape B — safeParse + sendValidationError
+
+`sendValidationError` (`src/errors/helpers.ts`) is the one sanctioned way to reply inline for a
+validation failure. The schema lives in the feature's `validation-schema/` file (see
+`reference/service-implementation.md`), never inline in the handler.
 
 ```typescript
+// src/errors/helpers.ts
 import type { FastifyReply } from 'fastify';
 import type { ZodIssue } from 'zod';
 import { ReasonCode } from './codes.js';
@@ -263,28 +260,26 @@ export function sendValidationError(
 }
 ```
 
-Usage:
-
 ```typescript
-// UpdateWorkItemSchema imported from validation-schema/work-items.schema.js — not defined inline
+// UpdateWorkItemSchema imported from validation-schema/work-items.schema.js
 const parsed = UpdateWorkItemSchema.safeParse(request.body);
 if (!parsed.success) return sendValidationError(reply, parsed.error.issues);
 ```
 
-**Choosing between them:** Shape A keeps every handler on the same "throw, never branch on
-failure" shape as the rest of this skill — prefer it by default. Shape B is for the rarer case
-where the caller genuinely needs the `safeParse` result object itself in the handler (e.g. to
-read `parsed.data` differently depending on which optional fields were present, not just to
-validate-then-proceed) — if you're not doing that, Shape A is simpler and there's no reason to
-reach for `sendValidationError` at all.
+**Choosing:** default to Shape A — it keeps every handler on the same "throw, never branch on
+failure" shape as the rest of the skill. Reach for Shape B only when the handler genuinely needs
+the `safeParse` result object itself (e.g. reading `parsed.data` differently depending on which
+optional fields were present), not merely to validate-then-proceed.
 
-### handleXError (Upstream Failure Pattern)
+---
 
-For each external dependency, create a dedicated normaliser that throws an `ExtendableError`
-subclass. Name it `handleXError` where X is the upstream (e.g. `handleStripeError`).
+## handleXError — Upstream Failure Pattern
+
+For each external dependency, create a normaliser that throws an `ExtendableError` subclass.
+Name it `handleXError` where X is the upstream (e.g. `handleStripeError`).
 
 ```typescript
-// src/errors/domain.ts — add alongside other error classes
+// src/errors/domain.ts — alongside the other error classes
 export class UpstreamError extends ExtendableError {
   readonly reason_code = ReasonCode.UpstreamFailure as const;
 
@@ -294,7 +289,7 @@ export class UpstreamError extends ExtendableError {
   }
 }
 
-// src/services/payment.service.ts — usage
+// src/services/payment.service.ts
 async charge(amount: number): Promise<void> {
   try {
     await stripeClient.charge({ amount });
@@ -306,7 +301,12 @@ async charge(amount: number): Promise<void> {
 ```
 
 The route handler needs no knowledge of Stripe-specific error shapes — it lets the error
-propagate to `typedErrorMapper`, which maps `UpstreamError` to a 500 envelope.
+propagate to `typedErrorMapper`.
+
+> This is the lightweight shape: every upstream failure becomes one 500. A service that needs
+> 4xx passthrough, 502s, and circuit breaking uses `classifyUpstreamError()` instead — a
+> deliberately different name for deliberately different behavior. See
+> `reference/service-clients.md`; don't mix the two for the same upstream.
 
 ---
 
@@ -321,8 +321,8 @@ return reply.status(404).send({
   instance: request.url,
 });
 
-// ❌ RFC 7807 ProblemDetails shape — superseded by the error envelope
-{ type: string; title: string; status: number; instance: string }
+// ❌ RFC 7807 ProblemDetails shape (type/title/status/instance), in a response body or as a
+// ProblemDetailsSchema in a route's response schema — superseded by ErrorEnvelope
 
 // ❌ statusFor() switch in route files — maps error.kind to status code per route
 function statusFor(error: AppError): number {
@@ -337,7 +337,4 @@ if (result.error instanceof NotFoundError) {
 // ❌ Naked envelope construction — bypasses the helper contract
 return reply.status(400).send({ success: false, message: '...', reason_code: 1002 });
 // Use sendValidationError() or throw DomainValidationError instead.
-
-// ❌ ProblemDetailsSchema in route response schema — replaced by ErrorEnvelope
-const ProblemDetailsSchema = z.object({ type: z.string(), title: z.string(), ... });
 ```

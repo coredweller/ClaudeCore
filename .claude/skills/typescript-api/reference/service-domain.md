@@ -6,30 +6,9 @@ Fastify, Drizzle, or Vitest imports. The one exception is `DbClient` in the repo
 interface: an opaque persistence-handle port type, not a Drizzle query-API dependency —
 see the note under Repository Interface below.
 
-## Directory Layout
-
-```
-src/
-├── domain/
-│   ├── work-item.ts                    # Aggregate root + branded ID + factory
-│   └── errors.ts                       # Result<T>/ok/fail — optional, internal use only
-├── errors/                             # ExtendableError subclasses — see reference/service-errors.md
-├── repositories/
-│   ├── work-item.repository.interface.ts
-│   └── work-item.repository.ts         # Drizzle implementation (see implementation reference)
-├── services/
-│   ├── work-item.service.interface.ts
-│   └── work-item.service.ts            # (see implementation reference)
-├── routes/
-│   └── work-items.ts                   # Fastify route plugin (see implementation reference)
-└── schema/
-    └── work-items.schema.ts            # Drizzle table (see config reference)
-test/
-├── unit/
-│   └── work-item.service.test.ts       # (see test reference)
-└── integration/
-    └── work-items.routes.test.ts       # (see test reference)
-```
+Files covered here: `src/domain/work-item.ts`, `src/domain/errors.ts`,
+`src/repositories/*.repository.interface.ts`, `src/services/*.service.interface.ts`. Full
+project tree: `reference/service-config.md`.
 
 ---
 
@@ -81,9 +60,10 @@ export function reconstituteWorkItem(
 
 ## Domain Errors — `src/domain/errors.ts`
 
-`AppError` as a discriminated union is removed. Error propagation now uses custom error classes that extend `ExtendableError`. See `reference/service-errors.md` for the full class hierarchy.
+Error propagation uses custom classes extending `ExtendableError` — never an `AppError`
+discriminated union. Full hierarchy: `reference/service-errors.md`.
 
-`Result<T>` is retained as an optional internal mechanism for functions that prefer explicit branching over throwing:
+`Result<T>` is optional, for internal functions that prefer explicit branching over throwing:
 
 ```typescript
 // ── Result<T> — optional; useful for pure functions that branch without throwing ──
@@ -122,16 +102,12 @@ export interface IWorkItemRepository {
 }
 ```
 
-> `DbClient` is treated as a persistence-handle **port**, not a dependency on Drizzle's query
-> API — the interface never calls a Drizzle method on it, it only threads the handle through
-> so the service layer can decide whether a call participates in a transaction (see
-> `reference/service-database.md`, "Repository Signatures — DbClient Pattern"). This is the one
-> type-level exception to "no framework dependencies" at the top of this file: domain **logic**
-> (branded IDs, factories, error classes) stays Drizzle-free; the repository **contract** carries
-> one opaque handle type so `IWorkItemRepository` and `DrizzleWorkItemRepository`
-> (`reference/service-implementation.md`) actually satisfy the same shape — without it, a
-> Drizzle-backed repository cannot implement this interface at all, since transaction
-> participation requires the caller to pass the active `db`/`tx` handle into every call.
+> `DbClient` here is a persistence-handle **port**, not a dependency on Drizzle's query API —
+> the interface never calls a method on it, it only threads the handle through so the service
+> can decide whether a call joins a transaction (`reference/service-database.md`, "Repository
+> Signatures — DbClient Pattern"). This is the one type-level exception to "no framework
+> dependencies" above: without it a Drizzle-backed repository couldn't implement this interface
+> at all, since transaction participation requires the caller to pass the active handle in.
 
 ---
 

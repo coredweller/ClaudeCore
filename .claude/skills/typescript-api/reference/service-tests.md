@@ -1,6 +1,7 @@
 # TypeScript REST API — Test Templates
 
-Unit tests (service logic, no I/O) and integration tests (full HTTP pipeline via `app.inject()`).
+Three layers: service unit tests (no I/O), router unit tests (HTTP wiring only), and
+integration tests (full pipeline via `app.inject()`).
 
 ---
 
@@ -17,36 +18,36 @@ import { NotFoundError, DomainValidationError } from '../../src/errors/domain.js
 import type { IWorkItemRepository } from '../../src/repositories/work-item.repository.interface.js';
 import { WorkItemService } from '../../src/services/work-item.service.js';
 
-// WorkItemService imports and calls getDb() directly (see reference/service-database.md) —
-// mock the module so unit tests never need a real connection pool. vi.mock() calls are
-// hoisted above imports by Vitest automatically, so declaration order here doesn't matter.
-// Importing `getDb` here (not just in the service) resolves to the SAME mocked function —
-// that's what lets the beforeEach below re-arm it.
+// WorkItemService calls getDb() directly, so mock the module — unit tests never need a real
+// pool. vi.mock() is hoisted above imports, so declaration order doesn't matter. Importing
+// getDb here resolves to the SAME mocked function, which is what lets beforeEach re-arm it.
 vi.mock('../../src/db.js', () => ({ getDb: vi.fn() }));
 
-// restoreMocks: true (vitest.config.ts) calls vi.restoreAllMocks() before every test, which
-// resets a vi.mock()-factory vi.fn() to a no-op returning undefined — there's no "original
-// implementation" for it to restore to. Without this beforeEach, only the FIRST test in this
-// file would see a real return value from getDb(); every test after it would get undefined
-// silently. Re-arm the return value every test rather than relying on the factory's initial
-// arrow function to survive. The value is opaque: repository methods are mocked below too, so
-// its shape is never inspected — it only has to satisfy the DbClient type.
+// restoreMocks: true (vitest.config.ts) resets a vi.mock()-factory vi.fn() to a no-op
+// returning undefined before every test — there's no "original implementation" to restore
+// to. Without this beforeEach, only the FIRST test here would get a real return value from
+// getDb(); every later one would silently get undefined. The value is opaque: repository
+// methods are stubbed too, so nothing inspects its shape — it only satisfies DbClient.
 beforeEach(() => {
   vi.mocked(getDb).mockReturnValue({} as DbClient);
 });
 
 // ── Stub repository ──────────────────────────────────────────────────────────
+// Stubs take db: DbClient first, matching IWorkItemRepository — a stub written with the old
+// zero-arg signature fails tsc rather than silently passing.
 function makeRepository(overrides: Partial<IWorkItemRepository> = {}): IWorkItemRepository {
   return {
     findAll: vi.fn().mockResolvedValue([]),
     findById: vi.fn().mockResolvedValue(null),
-    // Promise.resolve() not async () => — async without await triggers require-await lint rule
+    // Promise.resolve(), not async () => — async with nothing to await trips require-await
     save: vi.fn().mockImplementation((_db: DbClient, item: WorkItem) => Promise.resolve(item)),
     deleteById: vi.fn().mockResolvedValue(false),
     ...overrides,
   };
 }
 
+// Only the 4 methods the service uses need stubbing; the double assertion satisfies Pino's
+// ~40-method Logger type without `as any` (banned by no-explicit-any).
 const noopLog = {
   debug: vi.fn(),
   info: vi.fn(),
@@ -66,9 +67,8 @@ describe('WorkItemService.listAll', () => {
     const result = await sut.listAll();
 
     expect(result).toEqual(items);
-    // vi.mocked() wraps the spy with its Mock type — avoids unbound-method lint error
-    // when passing a method reference to expect(). eslint.config.js disables
-    // @typescript-eslint/unbound-method for test files as a belt-and-suspenders measure.
+    // vi.mocked() wraps the spy with its Mock type — avoids an unbound-method lint error
+    // when passing a method reference to expect()
     expect(vi.mocked(repository.findAll)).toHaveBeenCalledOnce();
   });
 });
@@ -108,7 +108,7 @@ describe('WorkItemService.create', () => {
 
     expect(result.title).toBe('Walk the dog');
     expect(result.id).toBeDefined();
-    // save(db, item) — first arg is the mocked DbClient, second is the item under test
+    // save(db, item) — first arg is the mocked DbClient, second the item under test
     expect(vi.mocked(repository.save)).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ title: 'Walk the dog' }),
@@ -140,29 +140,18 @@ describe('WorkItemService.delete', () => {
 });
 ```
 
-> `WorkItemService` methods either resolve with a value or reject by throwing an
-> `ExtendableError` subclass — assert with `.resolves.toEqual(...)` / `.rejects.toThrow(...)`,
-> never `result.ok` (that field doesn't exist; the service never returns `Result<T>`).
-> `vi.fn()` stubs avoid mocking the logger — logging is a side effect, not a domain concern.
-> `noopLog as unknown as Logger` satisfies the full Pino `Logger` type (~40 methods) without
-> `as any` (banned by `no-explicit-any`). Only the 4 methods the service uses need to be stubbed.
-> `vi.mocked()` wraps spy references before passing to `expect()` — avoids `unbound-method`
-> lint errors. `eslint.config.js` also disables `unbound-method` for all test files because
-> `vi.fn()` mocks have no real `this` binding concerns.
-> Mock implementations use `Promise.resolve()` not `async () =>` — the latter triggers
-> `@typescript-eslint/require-await` when there is nothing to await.
-> Repository stubs take `db: DbClient` as their first parameter, matching
-> `IWorkItemRepository` (see `reference/service-domain.md`) — a stub written with the old
-> zero-arg signature fails `tsc`, not silently passes.
+> Service methods either resolve with a value or reject with an `ExtendableError` subclass —
+> assert with `.resolves.toEqual(...)` / `.rejects.toThrow(...)`, never `result.ok` (the service
+> never returns `Result<T>`, so that field doesn't exist). Logging is a side effect, not a
+> domain concern — stub it, don't assert on it.
 
 ---
 
 ## Router Unit Tests — `test/unit/work-items.router.test.ts`
 
-`createWorkItemsRouter(deps)` (see `reference/service-implementation.md`) is DI'd, so it can be
-mounted directly on a bare Fastify instance with fake deps — no `loadApp()`, no `initDb()`, not
-even the real error mapper. This is a lighter, narrower test than the full integration suite
-below: it proves the router wires HTTP → service correctly, not that the whole app boots.
+`createWorkItemsRouter(deps)` is DI'd, so it mounts on a bare Fastify instance with fake deps —
+no `loadApp()`, no `initDb()`, not even the error mapper. Narrower than the integration suite
+below: this proves the router wires HTTP → service, not that the whole app boots.
 
 ```typescript
 import { describe, expect, it, vi } from 'vitest';
@@ -185,8 +174,10 @@ function makeStubService(overrides: Partial<IWorkItemService> = {}): IWorkItemSe
   };
 }
 
-// No registerErrorMapper here — 500s from an unmapped thrown error are expected and fine;
-// this suite only asserts the router calls the right service method with the right args.
+// No registerErrorMapper — a 500 from an unmapped throw is expected and fine here; this
+// suite only asserts the router calls the right service method with the right args.
+// Mounted with NO prefix, unlike loadApp()'s '/api/v1': prefixing is app.register()'s job at
+// the mount site, so the router's own tests don't care what prefix production uses.
 async function buildTestApp(service: IWorkItemService) {
   const app = Fastify();
   app.setValidatorCompiler(validatorCompiler);
@@ -227,74 +218,48 @@ describe('createWorkItemsRouter', () => {
 });
 ```
 
-> `buildTestApp()` mounts `createWorkItemsRouter({ service })` with NO prefix, unlike
-> `loadApp()` which mounts it under `/api/v1` — routes here are requested at `/workitems`, not
-> `/api/v1/workitems`. Prefixing is `app.register()`'s job at the mount site, not the router's
-> own concern, so the router's own tests don't need to know or care what prefix production uses.
-> This suite complements, not replaces, the integration tests below — it isolates router wiring
-> from the rest of the app; the integration suite proves the whole request pipeline (including
-> `registerErrorMapper`) end-to-end.
-
-`createHealthRouter(checkDb)` takes its one dependency positionally (see
-`reference/service-implementation.md`) — the fake is just a function, no deps object to build:
+`createHealthRouter(checkDb)` takes its one dependency positionally, so the fake is just a
+function — no deps object to build:
 
 ```typescript
 import { describe, expect, it } from 'vitest';
 import Fastify from 'fastify';
 import { createHealthRouter } from '../../src/routes/health.js';
 
+async function buildHealthApp(checkDb: () => Promise<boolean>) {
+  const app = Fastify();
+  await app.register(createHealthRouter(checkDb));
+  await app.ready();
+  return app;
+}
+
 describe('createHealthRouter', () => {
-  it('GET / returns 200 without calling checkDb', async () => {
-    const checkDb = async (): Promise<boolean> => {
-      throw new Error('checkDb should never be called for /');
-    };
-    const app = Fastify();
-    await app.register(createHealthRouter(checkDb));
+  // The fake throws if called at all — that IS the assertion. If a future edit makes a
+  // dependency-free probe await checkDb(), these fail loudly instead of just getting slower.
+  it.each(['/', '/live', '/startup'])('GET %s returns 200 without calling checkDb', async (url) => {
+    const app = await buildHealthApp(() => {
+      throw new Error(`checkDb should never be called for ${url}`);
+    });
 
-    const response = await app.inject({ method: 'GET', url: '/' });
-
-    expect(response.statusCode).toBe(200);
-    await app.close();
-  });
-
-  it('GET /live returns 200 without calling checkDb', async () => {
-    const checkDb = async (): Promise<boolean> => {
-      throw new Error('checkDb should never be called for /live');
-    };
-    const app = Fastify();
-    await app.register(createHealthRouter(checkDb));
-
-    const response = await app.inject({ method: 'GET', url: '/live' });
+    const response = await app.inject({ method: 'GET', url });
 
     expect(response.statusCode).toBe(200);
     await app.close();
   });
 
-  it('GET /ready returns 200 when checkDb resolves true', async () => {
-    const app = Fastify();
-    await app.register(createHealthRouter(async () => true));
+  it.each([
+    [true, 200],
+    [false, 503],
+  ])('GET /ready returns %s → %i', async (ready, expected) => {
+    const app = await buildHealthApp(() => Promise.resolve(ready));
 
     const response = await app.inject({ method: 'GET', url: '/ready' });
 
-    expect(response.statusCode).toBe(200);
-    await app.close();
-  });
-
-  it('GET /ready returns 503 when checkDb resolves false', async () => {
-    const app = Fastify();
-    await app.register(createHealthRouter(async () => false));
-
-    const response = await app.inject({ method: 'GET', url: '/ready' });
-
-    expect(response.statusCode).toBe(503);
+    expect(response.statusCode).toBe(expected);
     await app.close();
   });
 });
 ```
-
-> The first test's `checkDb` throws if called at all — that's the assertion. `/` (and `/live`,
-> `/startup`) must never await the dependency; if a future edit accidentally makes them call
-> `checkDb()`, this test fails loudly instead of just becoming slightly slower.
 
 ---
 
@@ -309,9 +274,9 @@ import { NotFoundError, DomainValidationError } from '../../src/errors/domain.js
 import { createWorkItem, newWorkItemId } from '../../src/domain/work-item.js';
 import type { WorkItem, WorkItemId } from '../../src/domain/work-item.js';
 
-// ── Stub service factory ───────────────────────────────────────────────────────
-// Tests pass a stub directly to loadApp({ service }) — no vi.mock() needed.
-// Each test configures exactly the behavior it needs via mockResolvedValue/mockRejectedValue.
+// Stubs reject with the actual ExtendableError subclass the real service would throw, so
+// registerErrorMapper maps class → status exactly as in production. Each test overrides
+// only the behavior it needs; no vi.mock() and no database (loadApp() never calls initDb()).
 function makeStubService(overrides: Partial<IWorkItemService> = {}): IWorkItemService {
   return {
     listAll: vi.fn().mockResolvedValue([]),
@@ -348,21 +313,17 @@ describe('POST /api/v1/workitems', () => {
     expect(body.id).toMatch(/^[0-9a-f-]{36}$/);
   });
 
-  it('400 for empty title (Zod rejects before service is called)', async () => {
+  // Both 400 cases are rejected by CreateWorkItemSchema at Fastify's validation layer and
+  // never reach the stubbed create() — which is why the override above is a plain
+  // mockResolvedValue rather than a multi-call chain.
+  it.each([
+    ['empty title', { title: '' }],
+    ['missing title field', {}],
+  ])('400 for %s (Zod rejects before the service is called)', async (_label, payload) => {
     const response = await app.inject({
       method: 'POST',
       url: '/api/v1/workitems',
-      payload: { title: '' },
-    });
-
-    expect(response.statusCode).toBe(400);
-  });
-
-  it('400 when title field is missing (Zod rejects before service is called)', async () => {
-    const response = await app.inject({
-      method: 'POST',
-      url: '/api/v1/workitems',
-      payload: {},
+      payload,
     });
 
     expect(response.statusCode).toBe(400);
@@ -379,8 +340,8 @@ describe('GET /api/v1/workitems/:id', () => {
     app = await loadApp({
       service: makeStubService({
         getById: vi.fn()
-          // Type the id param explicitly — vi.fn() callbacks are untyped (any) by default,
-          // which triggers no-unsafe-assignment. Promise.resolve/reject not async — require-await.
+          // Type the id param explicitly — vi.fn() callbacks are `any` by default, which
+          // trips no-unsafe-assignment. Promise.resolve/reject, not async — require-await.
           .mockImplementation((id: WorkItemId) =>
             id === existingItem.id
               ? Promise.resolve(existingItem)
@@ -433,37 +394,21 @@ describe('DELETE /api/v1/workitems/:id', () => {
 
   afterAll(() => app.close());
 
-  it('204 when work item is deleted', async () => {
+  it.each([
+    ['204 when work item is deleted', () => existingId, 204],
+    ['404 when work item does not exist', () => missingId, 404],
+  ])('%s', async (_label, id, expected) => {
     const response = await app.inject({
       method: 'DELETE',
-      url: `/api/v1/workitems/${existingId}`,
+      url: `/api/v1/workitems/${id()}`,
     });
 
-    expect(response.statusCode).toBe(204);
-  });
-
-  it('404 when work item does not exist', async () => {
-    const response = await app.inject({
-      method: 'DELETE',
-      url: `/api/v1/workitems/${missingId}`,
-    });
-
-    expect(response.statusCode).toBe(404);
+    expect(response.statusCode).toBe(expected);
   });
 });
 ```
 
-> `app.inject()` fires requests through the full Fastify pipeline (validation,
-> serialization, `registerErrorMapper`) without binding a real TCP port.
-> `loadApp({ service })` injects the stub via the `AppDeps` interface — no `vi.mock()`
-> or module graph hacking, and no database: `loadApp()` never calls `initDb()` (see
-> `reference/service-app.md`). Tests are coupled to `IWorkItemService`,
-> not to the concrete `DrizzleWorkItemRepository` or the `db` module.
-> Service stubs reject with the actual `ExtendableError` subclass the real service would
-> throw (`NotFoundError`, `DomainValidationError`) — `registerErrorMapper` maps the thrown
-> class to a status exactly as it would in production, so these tests exercise the real
-> mapping, not a re-implementation of it.
-> The two "400" `POST` tests never actually reach the mocked `create` — `CreateWorkItemSchema`
-> (`z.string().min(1)`) rejects the request at Fastify's schema-validation layer first. The
-> stub's `create` override only fires for the valid-title case, which is why it's a plain
-> `mockResolvedValue` rather than a multi-call chain.
+> `app.inject()` fires requests through the full Fastify pipeline (validation, serialization,
+> `registerErrorMapper`) without binding a TCP port. `loadApp({ service })` injects the stub via
+> the `AppDeps` interface — no module-graph hacking and no database. Tests are coupled to
+> `IWorkItemService`, never to `DrizzleWorkItemRepository` or the `db` module.

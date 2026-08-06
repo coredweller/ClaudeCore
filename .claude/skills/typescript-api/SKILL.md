@@ -11,7 +11,7 @@ allowed-tools: Bash, Read, Glob, Grep
 | Decision | Choice | Reason |
 |----------|--------|--------|
 | Framework | Fastify v5 | Type-safe, schema-driven, fastest Node HTTP framework; first-class TypeScript support |
-| Validation | Zod + `@fastify/type-provider-zod` | Runtime validation with inferred static types — one schema, zero duplication |
+| Validation | Zod + `fastify-type-provider-zod` | Runtime validation with inferred static types — one schema, zero duplication |
 | ORM | Drizzle ORM | Fully typed SQL, no magic, no N+1, explicit queries |
 | DB driver | `pg` (node-postgres) + `Pool` | Explicit pool lifecycle; `initDb()` fail-fast before HTTP starts; `getDb()` throws if uninitialized |
 | Error handling | Error envelope `{ success, message, reason_code }` + `typedErrorMapper` | One envelope shape for all errors including 500; class→status in one place; ad-hoc inline 4xx is the named anti-pattern |
@@ -23,36 +23,30 @@ allowed-tools: Bash, Read, Glob, Grep
 
 ## Process
 
-`code-standards.md` is auto-loaded from rules — it is the only file read unconditionally. For reference files, consult the table below and load only what your specific task requires.
+`code-standards.md` is auto-loaded from rules — it is the only file read unconditionally. Load reference files only as the Reference Files table below dictates. (`reference/code-standards.md` is a portable copy of the same rules, bundled so this skill can be dropped into a repo with no rules directory — never read it in this repo.)
 
-1. Identify which reference files apply to your task (see Reference Files table below)
-2. Hard-to-reverse infrastructure choice on the table (ORM, message broker, cache, auth flow)? Write an ADR before implementing it — see the `architecture-decision-records` skill for the template
+1. Identify which reference files apply to your task
+2. Hard-to-reverse infrastructure choice (ORM, message broker, cache, auth flow)? Write an ADR before implementing — see the `architecture-decision-records` skill
 3. Define Zod schemas **first** — they derive both runtime validation and static types
 4. Register `setNotFoundHandler` then `registerErrorMapper(app)` in `loadApp()` before routes
 5. Throw custom error classes from handlers; never construct inline error responses
 6. Run `npm run typecheck && npm test` before finishing
-
 
 ## Startup Sequence
 
 `server.ts` is the only entry point. `app.ts` exports `loadApp()` — the factory consumed by both `server.ts` and integration tests.
 
 ```
-server.ts
-  1. const server = await loadApp()          ← registers plugins + routes; zero resource access
-  2. await initDb()                          ← pool created, TLS configured, pool.connect() verified
-  3. await server.listen(...)                ← starts accepting HTTP traffic
-  4. SIGTERM/SIGINT →
-       server.server.closeIdleConnections()  ← drain keep-alive sockets immediately
-       await server.close()                  ← wait for in-flight requests
-       await closeDb()                       ← release pool (reverse init order)
-       process.exit(0)
-     [10 s force-exit timer, unref'd, fires exit(1) if teardown stalls]
+1. const server = await loadApp()   ← plugins + routes; zero resource access
+2. await initDb()                   ← pool created, TLS configured, pool.connect() verified
+3. await migrate(getDb(), {...})    ← pending migrations, skipped when NODE_ENV=test
+4. await server.listen(...)         ← starts accepting HTTP traffic
+5. SIGTERM/SIGINT → drain, close resources in reverse init order, process.exit(0)
+   [10 s force-exit timer, unref'd, fires exit(1) if teardown stalls]
 ```
 
-**Why this order matters:** integration tests call `loadApp()` with stub services and never touch the database. If `initDb()` were inside `loadApp()`, every test would require a live DB connection or a module-level mock.
-
-Full signal handler with `closeIdleConnections()`, force-exit timer, multi-resource teardown order, and K8s `terminationGracePeriodSeconds` guidance: `reference/service-lifecycle.md`.
+Full `server.ts` implementation and K8s termination guidance: `reference/service-lifecycle.md`.
+Why `initDb()` sits outside `loadApp()`: `reference/service-database.md`, "Startup Sequence".
 
 ## Common Commands
 
@@ -62,7 +56,7 @@ npm run build        # Compile TypeScript to dist/
 npm start            # Run compiled output (dist/server.js)
 npm test             # Run Vitest test suite
 npm run typecheck    # tsc --noEmit (type-check without emitting)
-npm run lint         # ESLint with @typescript-eslint
+npm run lint         # ESLint with typescript-eslint
 npm run format       # Prettier --write
 npm run format:check # Prettier --check (CI)
 npm run db:generate  # drizzle-kit generate (create migration files)
@@ -75,12 +69,13 @@ npm run db:studio    # Drizzle Studio (visual DB browser)
 | Pattern | Implementation |
 |---------|----------------|
 | Domain IDs | Branded type: `type WorkItemId = string & { readonly _brand: 'WorkItemId' }` |
-| Validation (automatic) | Zod schema in `validation-schema/<feature>.schema.ts` (`*Schema` naming) → `z.infer<typeof Schema>`; Fastify's type provider validates `{ schema: { body, params, ... } }` automatically. Distinct from `schema/<feature>.schema.ts` (Drizzle table definitions, DB layer, not HTTP) |
-| Validation (manual, auto isn't enough) | Shape A `validation/<feature>-request.ts` — parses `unknown`, returns typed DTO, throws `DomainValidationError` — OR — Shape B `validation-schema/<feature>.schema.ts` + `.safeParse()` + `sendValidationError()`. Either way, raw Zod never appears in the handler body |
+| Two `*.schema.ts` directories | `validation-schema/<feature>.schema.ts` = Zod, HTTP layer (`*Schema` naming, `z.infer` types). `schema/<feature>.schema.ts` = Drizzle tables, DB layer. Same filename, different directory — the import path says which layer you're in |
+| Validation (automatic) | Fastify's type provider validates `{ schema: { body, params, ... } }` from the `validation-schema/` Zod schema — no parse call in the handler |
+| Validation (manual) | Shape A `validation/<feature>-request.ts` parses `unknown` → typed DTO, throws `DomainValidationError` — OR — Shape B `.safeParse()` + `sendValidationError()`. Either way, raw Zod never appears in the handler body |
 | Result type | `type Result<T, E = ExtendableError> = \| { ok: true; value: T } \| { ok: false; error: E }` — internal use only |
 | Service return | Throw custom error class on failure; return value directly on success |
-| Router | `createFooRouter(deps: FooDeps): FastifyPluginCallbackZod` — deps object injected (not imported), mounted via `app.register(createFooRouter(deps), { prefix })`; a router with exactly one dependency (e.g. `createHealthRouter(checkDb)`) takes it positionally instead of wrapping a one-field deps object |
-| Health probes + root | `createHealthRouter(checkDb)` mounted unprefixed, outside `/api/v1` — `/`, `/live`, and `/startup` return `{ status, version }` immediately with no dependency check; `/ready` awaits `checkDb()`, returns 503 (not an `ErrorEnvelope`) if unreachable |
+| Router | `createFooRouter(deps: FooDeps): FastifyPluginCallbackZod` — deps injected (not imported), mounted via `app.register(createFooRouter(deps), { prefix })`. A router with exactly one dependency takes it positionally (`createHealthRouter(checkDb)`) |
+| Health probes + root | `createHealthRouter(checkDb)` mounted unprefixed, outside `/api/v1` — `/`, `/live`, `/startup` answer immediately with no dependency check; `/ready` awaits `checkDb()`, returns 503 (not an `ErrorEnvelope`) if unreachable |
 | Route handler | `throw new XError(...)` on failure; `return value` on success — **never** `reply.status(4xx).send(...)` |
 | Error envelope | `{ success: false, message: string, reason_code: number }` — all errors, every status code |
 | typedErrorMapper | `app.setErrorHandler(...)` in `loadApp()` — sole place for class→status mapping; no `instanceof` in routes |
@@ -89,9 +84,8 @@ npm run db:studio    # Drizzle Studio (visual DB browser)
 | DB lifecycle | `initDb()` in `server.ts` after `loadApp()`; `getDb()` throws if called before init; `closeDb()` on SIGTERM |
 | Transaction ownership | Service calls `getDb().transaction(tx => ...)`; passes `tx` to every repository method in the boundary |
 | DbClient type | `type DbClient = Db \| TX` — extracted from `Parameters<Parameters<Db['transaction']>[0]>[0]`; enables transparent TX participation |
-| Config | `z.object({...}).parse(process.env)` — validated at startup, exported as typed `config`; every key backed by a real env var, every credential field `sensitive: true` in `fieldMeta`, redacted via `getProperties()` — never log or serialize `config` directly |
-| Logging | `request.log.info({ workItemId }, 'message')` — structured, never string interpolation. Additive: routes accumulate a `logFields` object through the handler and emit one `request.log?.info(logFields, 'operation completed')` at the end of the success path — this doesn't replace the service's own `debug`/`warn`/`info` calls |
-| Error handler | `registerErrorMapper(app)` wires `setErrorHandler`; maps each `ExtendableError` subclass to its status code |
+| Config | `z.object({...}).parse(process.env)` — every key backed by a real env var, every credential `sensitive: true` in `fieldMeta`, redacted via `getProperties()`; never log or serialize `config` directly |
+| Logging | `request.log.info({ workItemId }, 'message')` — structured, never string interpolation. Routes accumulate a `logFields` object and emit one summary line at the end of the success path, additive to the service's own `debug`/`warn`/`info` calls |
 
 ## Reference Files
 
@@ -108,22 +102,12 @@ npm run db:studio    # Drizzle Studio (visual DB browser)
 
 ### Optional Reference Files
 
-Only load these when the service actually needs that capability.
+Only load these when the service actually needs that capability — and load the file before generating any code that uses the packages it documents.
 
-| File | Load when... | Key additions |
-|------|--------------|---------------|
-| `reference/service-clients.md` | Service proxies or composes an upstream HTTP API | Typed error taxonomy (`GatewayError`/`NetworkError`/`UpstreamClientError`/`CredentialError`), `request<T>()` with AbortController timeout, per-operation lazy circuit breakers (`opossum`), `classifyUpstreamError()` (not `handleXError()` — see `service-errors.md`'s distinct function of that name), `typedErrorMapper` extensions for 502/4xx passthrough |
-| `reference/service-observability.md` | Service emits application metrics to Datadog | `hot-shots` DogStatsD singleton (`initMetrics/getMetrics/closeMetrics`), bounded-cardinality tag rules, timing pattern on every path including failures, throttled `errorHandler`, import-time config caveat |
-
-## Optional Stack Choices
-
-Load the corresponding reference file before generating any code that uses these.
-
-| Capability | Package | Decision |
-|------------|---------|----------|
-| HTTP client timeouts | Built-in `fetch` + `AbortController` | No extra package; timer cleared in `finally`; timeout throws `NetworkError` caught upstream |
-| Circuit breaker | `opossum` | Per-operation breakers so one slow endpoint doesn't trip another; `errorFilter` excludes 4xx (expected) from failure count; lazy singleton because modules load before config validation |
-| Application metrics | `hot-shots` (DogStatsD) | Lazy `initMetrics()` singleton; `errorHandler` throttled to 1 log/min; tag values must be bounded enums — never IDs, URLs, or user input |
+| File | Load when... | Adds |
+|------|--------------|------|
+| `reference/service-clients.md` | Service proxies or composes an upstream HTTP API | Typed error taxonomy (`GatewayError`/`NetworkError`/`UpstreamClientError`/`CredentialError`); `request<T>()` with built-in `fetch` + `AbortController` timeout (no extra package); per-operation lazy `opossum` circuit breakers (`errorFilter` excludes 4xx so one flaky endpoint can't trip another); `classifyUpstreamError()`; `typedErrorMapper` branches for 502/4xx passthrough |
+| `reference/service-observability.md` | Service emits application metrics to Datadog | `hot-shots` DogStatsD lazy singleton (`initMetrics`/`getMetrics`/`closeMetrics`), bounded-cardinality tag rules, timing on every path including failures, throttled `errorHandler` (1 log/min), import-time config caveat |
 
 ## Error Routing
 
@@ -134,10 +118,11 @@ Every error surface in a route handler has exactly one correct action. No except
 | Service / repo signals domain error | `throw new XError(...)` | `typedErrorMapper` |
 | Manual validation (Shape A) | Parser throws `DomainValidationError` | `typedErrorMapper` |
 | Manual validation (Shape B) | `return sendValidationError(reply, parsed.error.issues)` | helper enforces envelope directly |
-| External / upstream call fails | `handleXError(err)` — throws `UpstreamError` | `typedErrorMapper` → 500 envelope |
+| Upstream call fails | `handleXError(err)` throws `UpstreamError` (or `classifyUpstreamError()` — see `service-clients.md`) | `typedErrorMapper` |
+| Genuine bug (`TypeError`, unguarded `null`) | Don't catch | `typedErrorMapper` fallback → 500 envelope |
 | Happy path | `return value` or `return reply.status(201).send(value)` | — |
 
-**Anti-pattern:** any `reply.status(4xx).send({...})` written directly in a route handler. If you are about to write one, stop and use the table above.
+**Anti-pattern:** any `reply.status(4xx).send({...})` written directly in a route handler. Every `catch` must log and rethrow or throw a typed error — never swallow.
 
 ## Documentation Sources
 
@@ -150,12 +135,3 @@ Before generating code, verify against current docs:
 | Drizzle ORM | Context7 MCP (`drizzle-team/drizzle-orm`) | `pgTable`, `db.select()`, `db.insert()`, `db.delete()`, `eq`, migrations |
 | Vitest | Context7 MCP (`vitest-dev/vitest`) | `describe`, `it`, `expect`, `vi.fn()`, `beforeEach`, coverage |
 | TypeScript | Context7 MCP (`microsoft/TypeScript`) | Branded types, `satisfies`, `const` assertions, `noUncheckedIndexedAccess` |
-
-## Error Handling
-
-- **All errors** return `{ success: false, message, reason_code }` — same envelope at every status code including 500
-- **Domain errors**: throw a custom `ExtendableError` subclass from the handler (or service) — `typedErrorMapper` maps class → status
-- **Validation failures** (automatic Fastify/Zod validation isn't enough): Shape A — a `validation/<feature>-request.ts` parser throws `DomainValidationError`, same as any other domain error; OR Shape B — explicit `safeParse()` + `return sendValidationError(reply, issues)`, which adds `validation_errors: ZodIssue[]` to the envelope
-- **Upstream failures**: `throw new UpstreamError(name, cause)` — `typedErrorMapper` returns 500 envelope; never swallow upstream errors
-- **Never** catch and swallow: every `catch` must log and rethrow or throw a typed error
-- **Never** write `reply.status(4xx).send({...})` in a route handler — that is the named anti-pattern; use the Error Routing table above

@@ -151,29 +151,12 @@ async create(title: string): Promise<WorkItem> {
 
 ---
 
-## Import-Time Config Caveat
-
-`hot-shots` reads the DogStatsD agent address at construction time. Constructing `StatsD` at module scope reads `config.STATSD_HOST` and `config.STATSD_PORT` **before** `z.parse(process.env)` runs in `config.ts`. The symptom is a silent wrong-value (the env var exists but hasn't been parsed yet) or a crash if the config object is referenced before the module that defines it runs.
-
-```typescript
-// ❌ Module-level — reads config before it has been validated
-const metrics = new StatsD({ host: config.STATSD_HOST, port: config.STATSD_PORT });
-
-// ✅ Lazy singleton — initMetrics() is called from server.ts after loadApp() returns,
-//    which is after z.parse(process.env) has already run and validated config
-export function initMetrics(): void {
-  _metrics = new StatsD({ host: config.STATSD_HOST, port: config.STATSD_PORT, ... });
-}
-```
-
-This is the same constraint as `initDb()`. The rule is the same: **no resource construction at module scope that reads `config`**.
-
----
-
 ## Config Additions
 
+Added to the canonical env schema in `reference/service-config.md` (each needs a `fieldMeta`
+entry too — none of these are sensitive):
+
 ```typescript
-// src/config.ts — add to the Zod env schema
 STATSD_HOST:  z.string().default('localhost'),
 STATSD_PORT:  z.coerce.number().int().positive().default(8125),
 SERVICE_NAME: z.string().min(1).default('myapi'),
@@ -191,7 +174,10 @@ SERVICE_NAME=myapi
 ## Forbidden Patterns
 
 ```typescript
-// ❌ Module-level StatsD — reads config before validation
+// ❌ Module-level StatsD — hot-shots reads the agent address at construction time, so this
+// runs before z.parse(process.env) validates config. Symptom is a silent wrong value, or a
+// crash if config is referenced before its module runs. Same constraint as initDb(): no
+// resource construction at module scope that reads `config`.
 const metrics = new StatsD({ host: config.STATSD_HOST, port: config.STATSD_PORT });
 
 // ❌ No errorHandler — UDP errors throw uncaught exceptions
@@ -200,9 +186,6 @@ const metrics = new StatsD({ host: 'localhost', port: 8125 });
 // ❌ Unthrottled errorHandler — dead agent → millions of lines/minute to stderr
 new StatsD({ errorHandler: (err) => console.error(err) });
 
-// ❌ High-cardinality tags
-getMetrics().increment('request', { userId, workItemId, path: req.url });
-
 // ❌ Timing only on the success path — failures produce no metric
 try {
   const result = await operation();
@@ -210,9 +193,8 @@ try {
   return result;
 }
 
-// ❌ Error message in a tag — free text, unbounded
+// ❌ Unbounded tags — see the cardinality tables above
+getMetrics().increment('request', { userId, workItemId, path: req.url });
 getMetrics().increment('error', { message: err.message });
-
-// ❌ User input in a tag — unbounded and PII risk
-getMetrics().increment('work_item.created', { title: item.title });
+getMetrics().increment('work_item.created', { title: item.title });  // also PII risk
 ```

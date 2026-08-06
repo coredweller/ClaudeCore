@@ -1,7 +1,7 @@
 # TypeScript REST API — Implementation Templates
 
-Concrete infrastructure layer: Drizzle ORM repository, service business logic, and Fastify route plugin.
-These files depend on external frameworks (Drizzle, Pino, Fastify, Zod).
+Concrete infrastructure layer: Drizzle repository, service business logic, Zod schemas, and
+Fastify route plugins. These files depend on external frameworks (Drizzle, Pino, Fastify, Zod).
 
 ---
 
@@ -40,6 +40,7 @@ export class DrizzleWorkItemRepository implements IWorkItemRepository {
       .where(eq(workItems.id, id))
       .limit(1);
 
+    // rows[0] is safe under noUncheckedIndexedAccess because the ternary guards undefined
     const row = rows[0];
     return row ? reconstituteWorkItem(row.id, row.title, row.createdAt) : null;
   }
@@ -64,15 +65,9 @@ export class DrizzleWorkItemRepository implements IWorkItemRepository {
 }
 ```
 
-> This is the ONE canonical `DrizzleWorkItemRepository` — `reference/service-database.md`
-> points here rather than keeping its own copy, so the two can't drift apart again.
-> Never expose raw Drizzle row types outside the repository. Reconstitute domain objects
-> at the repository boundary — callers never see DB internals.
-> `rows[0]` is safe under `noUncheckedIndexedAccess` because the ternary guards `undefined`.
-> `db: DbClient` as the first parameter on every method (not a constructor-injected `Db`) is
-> what lets the service pass either the pool-level `Db` or an active `tx` — see
-> `reference/service-database.md` for the non-negotiable rule and why a constructor-injected
-> `Db` field breaks transaction participation.
+> This is the one canonical `DrizzleWorkItemRepository`. Never expose raw Drizzle row types
+> outside the repository — reconstitute domain objects at the boundary so callers never see DB
+> internals.
 
 ---
 
@@ -133,10 +128,11 @@ export class WorkItemService implements IWorkItemService {
 }
 ```
 
-> Services throw custom error classes (`NotFoundError`, `DomainValidationError`) — not return `Result<T>`.
-> Thrown errors propagate through the route handler to `typedErrorMapper`, which sets status + envelope.
-> Unexpected DB exceptions also propagate to `typedErrorMapper` → 500 envelope.
+> These are the simple, single-call cases: the service passes `getDb()` straight through. A
+> use case spanning two repositories owns a transaction instead — `getDb().transaction(tx =>
+> ...)`, see `reference/service-database.md`.
 > Log at `warn` for expected failures (not found), `info` for mutations, `debug` for reads.
+> Unexpected DB exceptions propagate untouched to `typedErrorMapper` → 500 envelope.
 
 ---
 
@@ -144,14 +140,8 @@ export class WorkItemService implements IWorkItemService {
 
 One file per feature, `*Schema` naming, inferred types exported alongside. This is the single
 home for a feature's Zod schemas whether Fastify validates them automatically (as here) or a
-handler calls `.safeParse()` manually (see `reference/service-errors.md`, "Two Accepted
-Validation Shapes") — either way, raw Zod stays out of the route file body.
-
-> `validation-schema/` (this directory) holds Zod schemas for the HTTP layer.
-> `schema/` (see `reference/service-database.md`) holds Drizzle table definitions for the DB
-> layer. Both happen to use a file named `work-items.schema.ts` — same feature, two different
-> layers, deliberately distinct directory names so the import path itself says which one you're
-> in (`from '../validation-schema/work-items.schema.js'` vs `from '../schema/work-items.schema.js'`).
+handler calls `.safeParse()` manually (`reference/service-errors.md`, "Two Accepted Validation
+Shapes").
 
 ```typescript
 import { z } from 'zod';
@@ -176,10 +166,9 @@ export const WorkItemIdParamSchema = z.object({
 export type WorkItemIdParamDto = z.infer<typeof WorkItemIdParamSchema>;
 ```
 
-> Exported inferred types (`WorkItemDto`, `CreateWorkItemDto`, ...) are for call sites outside
-> Fastify's own type-provider inference (e.g. a client SDK, a non-route consumer) — route
-> handlers never need them explicitly, `fastify-type-provider-zod` infers `request.body` /
-> `request.params` from the schema passed into `{ schema: {...} }` directly.
+> The exported inferred types are for call sites outside Fastify's own inference (a client SDK,
+> a non-route consumer). Route handlers never need them — `fastify-type-provider-zod` infers
+> `request.body`/`request.params` from the schemas passed into `{ schema: {...} }`.
 
 ---
 
@@ -201,11 +190,9 @@ export interface WorkItemsRouterDeps {
   service: IWorkItemService;
 }
 
-// ── Factory — injects dependencies, returns a Fastify plugin ─────────────────
-// Uses FastifyPluginCallbackZod (sync) because registration only calls app.get/post/delete —
-// no awaiting during setup. Using async here triggers @typescript-eslint/require-await.
-// Deps as a typed object (not positional params) — this is the standard shape for every
-// DB-backed router: tests substitute a fake `service` here without touching the real one.
+// Factory — injects dependencies, returns a Fastify plugin. FastifyPluginCallbackZod (sync,
+// done()) because registration only calls app.get/post/delete; `async` with nothing to await
+// triggers @typescript-eslint/require-await.
 export function createWorkItemsRouter(deps: WorkItemsRouterDeps): FastifyPluginCallbackZod {
   const { service } = deps;
 
@@ -228,8 +215,8 @@ export function createWorkItemsRouter(deps: WorkItemsRouterDeps): FastifyPluginC
       { schema: { params: WorkItemIdParamSchema, response: { 200: WorkItemSchema } } },
       async (request) => {
         const id = workItemIdFrom(request.params.id);
-        // service throws NotFoundError if missing — typedErrorMapper returns 404 envelope
-        // AND logs it; the accumulator log below only runs on the success path.
+        // service throws NotFoundError if missing — typedErrorMapper returns the 404
+        // envelope AND logs it; the summary line below only runs on the success path.
         const item = await service.getById(id);
 
         request.log?.info({ operation: 'getWorkItem', workItemId: id }, 'operation completed');
@@ -242,9 +229,8 @@ export function createWorkItemsRouter(deps: WorkItemsRouterDeps): FastifyPluginC
       '/workitems',
       { schema: { body: CreateWorkItemSchema, response: { 201: WorkItemSchema } } },
       async (request, reply) => {
-        // ── Structured-log accumulator — build fields as the handler runs, one log line ──
-        // at the end. Errors thrown by service.create() skip this line entirely; they're
-        // logged once by typedErrorMapper instead — never both.
+        // Structured-log accumulator — build fields as the handler runs, emit one line at
+        // the end. A throw skips this line entirely; typedErrorMapper logs it instead.
         const logFields: Record<string, unknown> = { operation: 'createWorkItem' };
 
         const item = await service.create(request.body.title);
@@ -265,7 +251,6 @@ export function createWorkItemsRouter(deps: WorkItemsRouterDeps): FastifyPluginC
         const id = workItemIdFrom(request.params.id);
         logFields['workItemId'] = id;
 
-        // service throws NotFoundError if missing — typedErrorMapper returns 404 envelope
         await service.delete(id);
 
         request.log?.info(logFields, 'operation completed');
@@ -278,35 +263,22 @@ export function createWorkItemsRouter(deps: WorkItemsRouterDeps): FastifyPluginC
 }
 ```
 
-> No `statusFor()`, no `ProblemDetailsSchema`, no inline `reply.status(4xx).send({...})`.
-> Handlers throw or let the service throw — `typedErrorMapper` owns status + envelope.
-> `createWorkItemsRouter(deps)` captures `deps.service` in a closure and returns a
-> `FastifyPluginCallbackZod`. The callback pattern (`done()`) is used instead of `async`
-> because route registration is synchronous; `async` with no `await` triggers
-> `@typescript-eslint/require-await`.
+> No `statusFor()`, no `ProblemDetailsSchema`, no inline `reply.status(4xx).send({...})` —
+> handlers throw, or let the service throw, and `typedErrorMapper` owns status + envelope.
 >
-> **Structured-log accumulator** (additive to service-level logging, not a replacement — the
-> service keeps its own `debug`/`warn`/`info` calls from the section above): build a typed
-> `logFields` object at handler entry, add to it as the handler progresses, and emit exactly
-> one `request.log?.info(logFields, 'operation completed')` at the end of the success path.
-> This is a per-request summary line for the route layer, distinct from the service's own
-> lower-level traces — use it on handlers where a single "here's what happened" line at the
-> HTTP boundary is valuable; a trivial single-branch `GET` doesn't need much in `logFields`,
-> but the shape stays consistent across every handler regardless. `request.log` is always
-> defined on a Fastify request (`?.` is defensive, not load-bearing) — kept for the case where
-> a route function is exercised outside a real Fastify request in a lighter test harness.
-> `deps: WorkItemsRouterDeps` (not a positional `service` param) is the general shape for any
-> router with one or more DB-backed dependencies — see `createHealthRouter` below for the
-> single-dependency exception, where the factory takes that one dependency positionally
-> instead of wrapping it in a one-field deps object.
+> **The `logFields` accumulator is additive**, not a replacement for the service's own
+> `debug`/`warn`/`info` calls: it's a per-request summary at the HTTP boundary. Keep the shape
+> consistent across handlers even where a trivial `GET` has little to add. `request.log` is
+> always defined on a real Fastify request — the `?.` is defensive, for a route function
+> exercised outside one in a lighter test harness.
+>
+> **Deps shape:** a typed deps object (`WorkItemsRouterDeps`) is the standard for any router,
+> so tests can substitute a fake `service`. The single exception is a router with exactly one
+> dependency, which takes it positionally — `createHealthRouter(checkDb)` below.
 
 ---
 
 ## Health Router — `src/routes/health.ts`
-
-Three K8s probes plus the root route, one factory. `checkDb` is the only dependency, so it's a
-positional parameter — not wrapped in a deps object the way `WorkItemsRouterDeps` is for
-routers with one or more DB-backed dependencies.
 
 ```typescript
 import { readFileSync } from 'node:fs';
@@ -322,26 +294,24 @@ type CheckDbFn = () => Promise<boolean>;
 
 export function createHealthRouter(checkDb: CheckDbFn): FastifyPluginCallbackZod {
   return function (app, _opts, done) {
-    // Root — GET / with no dependency check. Not a K8s probe: it exists because external
-    // uptime monitors, load balancer default health checks, and a human opening the base URL
-    // in a browser all hit `/` before they hit anything else. Same "no dependency" answer as
-    // liveness, registered here rather than a dedicated router because it shares every
-    // characteristic /live already has — no reason to stand up a second factory for it.
+    // Root — not a K8s probe: external uptime monitors, load balancer default health
+    // checks, and a human opening the base URL all hit `/` first. Same "no dependency"
+    // answer as liveness, so it lives here rather than in a second factory.
     app.get('/', () => ({ status: 'ok', version: APP_VERSION }));
 
-    // Liveness — is the process itself alive? Never touches the DB: if the DB is briefly
-    // unreachable, the process should NOT be killed and restarted — that doesn't fix a DB
-    // outage, it just adds pod-churn on top of it.
+    // Liveness — is the process alive? Never touches the DB: if the DB is briefly
+    // unreachable the process should NOT be killed and restarted, that just adds
+    // pod-churn on top of a DB outage.
     app.get('/live', () => ({ status: 'ok', version: APP_VERSION }));
 
-    // Startup — has the process finished booting? Same "no dependency" answer as liveness;
-    // K8s uses a separate probe so it can apply a longer initial grace period before
-    // liveness starts enforcing its (usually tighter) failure threshold.
+    // Startup — has the process finished booting? Same answer as liveness; K8s uses a
+    // separate probe so it can apply a longer initial grace period before liveness
+    // starts enforcing its tighter failure threshold.
     app.get('/startup', () => ({ status: 'ok', version: APP_VERSION }));
 
-    // Readiness — can this instance actually serve traffic right now? Awaits the real
-    // dependency. A false here tells the load balancer to stop routing traffic to this pod
-    // WITHOUT restarting it — the pod rejoins rotation once checkDb() succeeds again.
+    // Readiness — can this instance serve traffic right now? Awaits the real dependency.
+    // A false tells the load balancer to stop routing here WITHOUT restarting the pod;
+    // it rejoins rotation once checkDb() succeeds again.
     app.get('/ready', async (request, reply) => {
       const ready = await checkDb();
 
@@ -358,14 +328,11 @@ export function createHealthRouter(checkDb: CheckDbFn): FastifyPluginCallbackZod
 }
 ```
 
-> Mounted unprefixed (`/`, `/live`, `/ready`, `/startup`) — not under `/api/v1` — see
-> `reference/service-app.md`, "Middleware / Plugin Wiring Order". K8s probes shouldn't depend on API versioning,
-> auth, or any business-route middleware; keeping them outside the prefix means a future
-> change to `/api/v1` (auth requirement, rate limiting, a version bump) can never accidentally
-> break the probes an orchestrator restarts the pod over.
-> `checkDb` is injected, not imported — `createHealthRouter` never imports `getDb`/`db.js`
-> directly, so a test can pass a fake `checkDb` (`async () => false`) without any DB module
-> mocking. The real implementation lives in `src/db.ts` — see `reference/service-database.md`.
-> The 503 body on a failed readiness check deliberately does NOT use `ErrorEnvelope` — probes
-> are consumed by the orchestrator's HTTP client, not application error-handling code, and
-> don't go through `typedErrorMapper` since nothing is thrown here.
+> `checkDb` is injected, never imported — `createHealthRouter` doesn't touch `db.js`, so a test
+> passes a fake (`async () => false`) with no module mocking. The real implementation is in
+> `src/db.ts` (`reference/service-database.md`).
+> The 503 body deliberately does **not** use `ErrorEnvelope`: probes are consumed by the
+> orchestrator's HTTP client, not by application error-handling code, and nothing is thrown
+> here so `typedErrorMapper` is never involved.
+> Mounted unprefixed and outside every plugin — see `reference/service-app.md`, "Middleware /
+> Plugin Wiring Order", for why probes stay clear of versioning, auth, and rate limits.
