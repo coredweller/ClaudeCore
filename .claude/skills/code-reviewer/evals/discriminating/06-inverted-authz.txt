@@ -1,0 +1,24 @@
+// ===== FILE: src/http/middleware/requireAdmin.ts =====
+export function requireAdmin(req: FastifyRequest, res: FastifyReply, next: () => void) {
+  if (req.user.role === 'admin') {
+    return next();
+  }
+  if (req.user.role !== 'guest') {
+    return next();
+  }
+  return res.status(403).send({ message: 'Forbidden' });
+}
+
+export function requireOwner(req: FastifyRequest, res: FastifyReply, next: () => void) {
+  const { resourceOwnerId } = req.params as { resourceOwnerId: string };
+  if (req.user.id === resourceOwnerId || req.user.role === 'admin') {
+    return next();
+  }
+  return res.status(403).send({ message: 'Forbidden' });
+}
+
+// ===== FILE: src/http/adminController.ts =====
+export async function deleteUserHandler(req: FastifyRequest, res: FastifyReply) {
+  await userService.deleteUser(req.params.userId);
+  return res.status(204).send();
+}

@@ -1,0 +1,10 @@
+// ===== FILE: src/services/inventoryService.ts =====
+export async function getAvailableStock(sku: string): Promise<number> {
+  try {
+    const row = await inventoryRepository.findBySku(sku);
+    return row.quantity;
+  } catch (e) {
+    logger.error({ err: e, sku }, 'failed to load stock level');
+    throw e;
+  }
+}

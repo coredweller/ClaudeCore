@@ -1,0 +1,10 @@
+// ===== FILE: src/lib/redisClient.ts =====
+let client: RedisClient | undefined;
+
+export function initRedis(url: string): void {
+  client = createClient({ url });
+}
+
+export function getRedis(): RedisClient {
+  return client!;
+}

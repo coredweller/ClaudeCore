@@ -1,0 +1,29 @@
+// ===== FILE: src/http/orderController.ts =====
+export async function getOrderHandler(req: FastifyRequest, res: FastifyReply) {
+  const { orderId } = req.params as { orderId: string };
+  const order = await orderService.getOrder(orderId);
+  return res.send(order);
+}
+
+export async function listMyOrdersHandler(req: FastifyRequest, res: FastifyReply) {
+  const orders = await orderService.listOrdersForUser(req.user.id);
+  return res.send(orders);
+}
+
+// ===== FILE: src/services/orderService.ts =====
+export async function getOrder(orderId: string) {
+  return orderRepository.findById(orderId);
+}
+
+export async function listOrdersForUser(userId: string) {
+  return orderRepository.findByOwner(userId);
+}
+
+// ===== FILE: src/repositories/orderRepository.ts =====
+export async function findById(id: string) {
+  return db.query('SELECT * FROM orders WHERE id = $1', [id]);
+}
+
+export async function findByOwner(userId: string) {
+  return db.query('SELECT * FROM orders WHERE user_id = $1', [userId]);
+}

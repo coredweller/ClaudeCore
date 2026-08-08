@@ -1,0 +1,19 @@
+// ===== FILE: src/services/__tests__/paymentService.test.ts =====
+import { describe, it, expect, vi } from 'vitest';
+import { PaymentService } from '../paymentService';
+
+function createMockGateway(overrides: any = {}) {
+  return {
+    charge: vi.fn().mockResolvedValue({ status: 'succeeded' }),
+    ...overrides,
+  };
+}
+
+describe('PaymentService', () => {
+  it('marks an order paid on a successful charge', async () => {
+    const gateway = createMockGateway();
+    const service = new PaymentService(gateway);
+    const result = await service.charge({ orderId: 'ord_1', amountCents: 500 });
+    expect(result.status).toBe('succeeded');
+  });
+});

@@ -1,0 +1,7 @@
+{
+  "name": "claude-code-onboarding-kit",
+  "private": true,
+  "scripts": {
+    "verify:code-reviewer": "node .claude/skills/code-reviewer/harness/verify.mjs"
+  }
+}

@@ -1,0 +1,33 @@
+// ===== FILE: src/http/reportController.ts =====
+export async function exportReportHandler(req: FastifyRequest, res: FastifyReply) {
+  const { format } = req.query as { format: string };
+  const filePath = await reportGenerator.generate(format);
+  return res.sendFile(filePath);
+}
+
+export async function exportReportSafeHandler(req: FastifyRequest, res: FastifyReply) {
+  const { format } = req.query as { format: string };
+  if (!['pdf', 'html'].includes(format)) {
+    return res.status(422).send({ message: 'Unsupported format' });
+  }
+  const filePath = await reportGenerator.generateSafe(format as 'pdf' | 'html');
+  return res.sendFile(filePath);
+}
+
+// ===== FILE: src/services/reportGenerator.ts =====
+import { exec, execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
+
+export async function generate(format: string): Promise<string> {
+  const outputPath = `/tmp/report.${format}`;
+  await execAsync(`pandoc report.md -o ${outputPath} -t ${format}`);
+  return outputPath;
+}
+
+export async function generateSafe(format: 'pdf' | 'html'): Promise<string> {
+  const outputPath = `/tmp/report.${format}`;
+  await execFileAsync('pandoc', ['report.md', '-o', outputPath, '-t', format]);
+  return outputPath;
+}

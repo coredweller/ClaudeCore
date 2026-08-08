@@ -1,0 +1,36 @@
+{
+  "suite": "bespoke",
+  "mode": "rubric-withheld",
+  "purpose": "One violation + one clean control per house convention from this repo's own .claude/rules/*.md. Run with the rubric withheld and the code-reviewer skill active — tests whether the skill has genuinely internalized project-specific conventions, not just the generic checklist. This is the regression gate: it should be re-run whenever code-review-checklist.md or the rules files change.",
+  "grading_note": "Never paste this file into a reviewer prompt — grading only. Each pair is scored together: PASS requires the violation fixture to be flagged AND the clean fixture to not be flagged for the same convention. Either half failing fails the pair.",
+  "house_rule_source": ".claude/rules/code-standards.md",
+  "cases": [
+    {
+      "id": "01-silent-failure",
+      "convention": "No Silent Failures / No Mock Data / No Fallbacks (Error Handling)",
+      "violation_file": "01-silent-failure-violation.txt",
+      "violation_expected_verdict": "FLAG",
+      "clean_file": "01-silent-failure-clean.txt",
+      "clean_expected_verdict": "NO_FLAG",
+      "must_identify_in_violation": "catch block in getAvailableStock swallows the error and returns a fake 0 instead of logging and rethrowing/returning an error state"
+    },
+    {
+      "id": "02-unsafe-assertion",
+      "convention": "Type Safety — narrow, don't assert; parse untrusted input at the boundary",
+      "violation_file": "02-unsafe-assertion-violation.txt",
+      "violation_expected_verdict": "FLAG",
+      "clean_file": "02-unsafe-assertion-clean.txt",
+      "clean_expected_verdict": "NO_FLAG",
+      "must_identify_in_violation": "req.body as StripeEvent is an unchecked cast on untrusted external webhook input, never parsed/validated"
+    },
+    {
+      "id": "03-resource-lifecycle",
+      "convention": "Resource Lifecycle contract — initX fails on double-init, getX throws if uninitialized",
+      "violation_file": "03-resource-lifecycle-violation.txt",
+      "violation_expected_verdict": "FLAG",
+      "clean_file": "03-resource-lifecycle-clean.txt",
+      "clean_expected_verdict": "NO_FLAG",
+      "must_identify_in_violation": "initRedis has no double-init guard (silently replaces/leaks the client on a second call) and getRedis uses a non-null assertion instead of throwing a named error when uninitialized"
+    }
+  ]
+}

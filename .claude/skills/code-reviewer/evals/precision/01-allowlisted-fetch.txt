@@ -1,0 +1,14 @@
+// ===== FILE: src/integrations/webhookNotifier.ts =====
+const ALLOWED_HOSTS = new Set(['hooks.internal-partner.com', 'hooks.billing-provider.com']);
+
+export async function notifyPartner(hookUrl: string, payload: unknown): Promise<void> {
+  const target = new URL(hookUrl);
+  if (!ALLOWED_HOSTS.has(target.hostname)) {
+    throw new Error(`Host not allowlisted: ${target.hostname}`);
+  }
+  await fetch(target, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}

@@ -1,0 +1,74 @@
+// ===== FILE: src/repositories/walletRepository.ts =====
+import type { DbClient } from '../db/client';
+
+export async function findBalance(db: DbClient, walletId: string): Promise<number> {
+  const { rows } = await db.query<{ balance_cents: number }>(
+    'SELECT balance_cents FROM wallets WHERE id = $1',
+    [walletId],
+  );
+  if (rows.length === 0) {
+    throw new WalletNotFoundError(walletId);
+  }
+  return rows[0].balance_cents;
+}
+
+export async function setBalance(db: DbClient, walletId: string, balanceCents: number): Promise<void> {
+  await db.query('UPDATE wallets SET balance_cents = $1 WHERE id = $2', [balanceCents, walletId]);
+}
+
+export async function decrementBalance(
+  db: DbClient,
+  walletId: string,
+  amountCents: number,
+): Promise<number> {
+  const { rows } = await db.query<{ balance_cents: number }>(
+    `UPDATE wallets
+        SET balance_cents = balance_cents - $1
+      WHERE id = $2 AND balance_cents >= $1
+      RETURNING balance_cents`,
+    [amountCents, walletId],
+  );
+  if (rows.length === 0) {
+    throw new InsufficientFundsError(walletId);
+  }
+  return rows[0].balance_cents;
+}
+
+// ===== FILE: src/services/walletService.ts =====
+import { getDb } from '../db/client';
+import * as walletRepository from '../repositories/walletRepository';
+
+export async function debitWallet(walletId: string, amountCents: number): Promise<number> {
+  const db = getDb();
+  const balance = await walletRepository.findBalance(db, walletId);
+  if (balance < amountCents) {
+    throw new InsufficientFundsError(walletId);
+  }
+  const remaining = balance - amountCents;
+  await walletRepository.setBalance(db, walletId, remaining);
+  return remaining;
+}
+
+export async function debitWalletAtomic(walletId: string, amountCents: number): Promise<number> {
+  const db = getDb();
+  return walletRepository.decrementBalance(db, walletId, amountCents);
+}
+
+// ===== FILE: src/handlers/walletHandlers.ts =====
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import * as walletService from '../services/walletService';
+
+type DebitRequest = FastifyRequest<{
+  Params: { walletId: string };
+  Body: { amountCents: number };
+}>;
+
+export async function postDebitHandler(req: DebitRequest, reply: FastifyReply) {
+  const remaining = await walletService.debitWallet(req.params.walletId, req.body.amountCents);
+  return reply.code(200).send({ balance_cents: remaining });
+}
+
+export async function postDebitCheckoutHandler(req: DebitRequest, reply: FastifyReply) {
+  const remaining = await walletService.debitWalletAtomic(req.params.walletId, req.body.amountCents);
+  return reply.code(200).send({ balance_cents: remaining });
+}

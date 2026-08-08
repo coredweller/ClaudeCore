@@ -1,0 +1,23 @@
+// ===== FILE: src/services/reportService.ts =====
+export async function buildOrderSummaries(orderIds: string[]) {
+  const summaries = [];
+  for (const id of orderIds) {
+    const order = await orderRepository.findById(id);
+    summaries.push({ id: order.id, total: order.total });
+  }
+  return summaries;
+}
+
+export async function buildOrderSummariesBatched(orderIds: string[]) {
+  const orders = await orderRepository.findByIds(orderIds);
+  return orders.map((order) => ({ id: order.id, total: order.total }));
+}
+
+// ===== FILE: src/repositories/orderRepository.ts =====
+export async function findById(id: string) {
+  return db.query('SELECT * FROM orders WHERE id = $1', [id]);
+}
+
+export async function findByIds(ids: string[]) {
+  return db.query('SELECT * FROM orders WHERE id = ANY($1)', [ids]);
+}

@@ -1,0 +1,53 @@
+{
+  "suite": "precision",
+  "mode": "rubric-in-prompt",
+  "purpose": "Clean code that pattern-matches a checklist violation on the surface but isn't one in context. The rubric is deliberately included in the reviewer's prompt so the traps are live — this tests restraint under a hint, not blind luck.",
+  "grading_note": "PASS = the reviewer's output contains no 🔴 or 🟡 finding anchored on the flagged line/pattern for that case. A 🔵 suggestion is tolerated. FAIL = the reviewer flags it as a blocking/warning finding (false positive).",
+  "cases": [
+    {
+      "id": "01-allowlisted-fetch",
+      "file": "01-allowlisted-fetch.txt",
+      "expected_verdict": "NO_FLAG",
+      "flagged_path": "src/integrations/webhookNotifier.ts",
+      "flagged_line_pattern": "await fetch(target",
+      "trap": "Looks like an SSRF-prone outbound fetch to a caller-controlled URL, but the hostname is checked against ALLOWED_HOSTS before the request fires.",
+      "disqualifying_categories": ["SSRF", "unvalidated request", "path traversal", "missing input validation", "authentication bypass"]
+    },
+    {
+      "id": "02-publishable-key",
+      "file": "02-publishable-key.txt",
+      "expected_verdict": "NO_FLAG",
+      "flagged_path": "src/config/stripeClient.ts",
+      "flagged_line_pattern": "STRIPE_PUBLISHABLE_KEY = 'pk_live_",
+      "trap": "Pattern-matches 'hardcoded API key', but Stripe publishable keys (pk_live_/pk_test_) are designed to ship in client-side code — they are not secrets.",
+      "disqualifying_categories": ["hardcoded credentials", "exposed secret", "API key exposed"]
+    },
+    {
+      "id": "03-any-in-test",
+      "file": "03-any-in-test.txt",
+      "expected_verdict": "NO_FLAG",
+      "flagged_path": "src/services/__tests__/paymentService.test.ts",
+      "flagged_line_pattern": "overrides: any = {}",
+      "trap": "`any` in a test-mock helper is conventionally justified boundary code for scaffolding a stub, not a domain-logic type-safety escape hatch.",
+      "disqualifying_categories": ["unsafe escape hatch", "no-explicit-any", "type safety violation"]
+    },
+    {
+      "id": "04-process-env-in-config",
+      "file": "04-process-env-in-config.txt",
+      "expected_verdict": "NO_FLAG",
+      "flagged_path": "src/config/env.ts",
+      "flagged_line_pattern": "stripeSecretKey: requireEnv",
+      "trap": "A config module handling a Stripe secret key pattern-matches 'secret exposed in source', but nothing is hardcoded — the value is read from the environment, and the module throws on a missing required variable rather than defaulting to an empty string. src/config/ is the designated place for env reads.",
+      "disqualifying_categories": ["hardcoded credentials", "exposed secret", "API key exposed", "silent failure", "missing input validation"]
+    },
+    {
+      "id": "05-table-name-sql-templating",
+      "file": "05-table-name-sql-templating.txt",
+      "expected_verdict": "NO_FLAG",
+      "flagged_path": "src/repositories/auditLogRepository.ts",
+      "flagged_line_pattern": "INSERT INTO ${table}",
+      "trap": "A template literal inside a SQL string pattern-matches 'SQL injection risk', but `table` is drawn from a fixed constant map keyed by a typed enum, not from user input; real parameters are bound via $1/$2/$3.",
+      "disqualifying_categories": ["SQL injection", "string concatenation in queries"]
+    }
+  ]
+}

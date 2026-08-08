@@ -1,0 +1,64 @@
+{
+  "suite": "discriminating",
+  "mode": "rubric-withheld",
+  "purpose": "Defects only visible by reasoning across multiple bundled files, each paired with a clean control that looks structurally similar. Rubric is graded, never shown to the reviewer — this tests real cross-file reasoning under normal review conditions.",
+  "grading_note": "PASS = findings include the named defect anchored on (or clearly naming) the buggy function/file, AND the clean control in the same bundle is not flagged as having the same defect. Binary per case, no partial credit.",
+  "cases": [
+    {
+      "id": "01-idor",
+      "file": "01-idor.txt",
+      "expected_verdict": "FLAG",
+      "defect": "IDOR",
+      "must_identify": "getOrderHandler → orderService.getOrder → orderRepository.findById fetches an order by id with no ownership check against req.user",
+      "must_not_flag_as_same_defect": "listMyOrdersHandler, which correctly scopes by req.user.id via findByOwner"
+    },
+    {
+      "id": "02-reinvented-util",
+      "file": "02-reinvented-util.txt",
+      "expected_verdict": "FLAG",
+      "defect": "reinvented utility (DRY)",
+      "must_identify": "centsToDisplay in invoicePdf.ts duplicates formatCurrency in lib/money.ts, which is imported and correctly used two lines later in the same file",
+      "must_not_flag_as_same_defect": "renderInvoiceTax, which correctly reuses formatCurrency"
+    },
+    {
+      "id": "03-n-plus-one",
+      "file": "03-n-plus-one.txt",
+      "expected_verdict": "FLAG",
+      "defect": "N+1 query",
+      "must_identify": "buildOrderSummaries loops calling orderRepository.findById per id instead of the batched findByIds already defined in the same repository",
+      "must_not_flag_as_same_defect": "buildOrderSummariesBatched, which correctly calls findByIds once"
+    },
+    {
+      "id": "04-transaction-leak",
+      "file": "04-transaction-leak.txt",
+      "expected_verdict": "FLAG",
+      "defect": "lost atomicity / transaction handle not propagated",
+      "must_identify": "invoiceRepository.voidPendingInvoices fetches its own connection via pool.connect() instead of accepting the tx handle the service opened, so a failure after markCancelled leaves no rollback for the invoice write",
+      "must_not_flag_as_same_defect": "subscriptionRepository.markCancelled, which correctly accepts and uses the tx handle"
+    },
+    {
+      "id": "05-taint-to-exec",
+      "file": "05-taint-to-exec.txt",
+      "expected_verdict": "FLAG",
+      "defect": "command injection (taint to exec)",
+      "must_identify": "exportReportHandler passes an unvalidated query param straight through reportGenerator.generate into a shell string executed via exec()",
+      "must_not_flag_as_same_defect": "exportReportSafeHandler / generateSafe, which allowlist-validates format and use execFile with an argument array"
+    },
+    {
+      "id": "06-inverted-authz",
+      "file": "06-inverted-authz.txt",
+      "expected_verdict": "FLAG",
+      "defect": "inverted/overbroad authorization check",
+      "must_identify": "requireAdmin's second branch (role !== 'guest') grants access to any non-guest role, not just admin — deleteUserHandler is reachable by any authenticated non-guest user",
+      "must_not_flag_as_same_defect": "requireOwner, which correctly checks ownership or admin role"
+    },
+    {
+      "id": "07-race-condition",
+      "file": "07-race-condition.txt",
+      "expected_verdict": "FLAG",
+      "defect": "race condition (check-then-act on shared state)",
+      "must_identify": "debitWallet reads the balance, checks it, then writes the new value as a separate statement with no lock or transaction — two concurrent debits both pass the check against the same stale read, and the second write silently discards the first debit",
+      "must_not_flag_as_same_defect": "debitWalletAtomic / decrementBalance, which applies the check and the decrement in a single conditional UPDATE"
+    }
+  ]
+}

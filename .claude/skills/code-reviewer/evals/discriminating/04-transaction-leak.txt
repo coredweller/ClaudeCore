@@ -1,0 +1,25 @@
+// ===== FILE: src/services/subscriptionService.ts =====
+export async function cancelSubscription(db: DbClient, subscriptionId: string) {
+  return db.transaction(async (tx) => {
+    await subscriptionRepository.markCancelled(tx, subscriptionId);
+    await invoiceRepository.voidPendingInvoices(subscriptionId);
+  });
+}
+
+// ===== FILE: src/repositories/subscriptionRepository.ts =====
+export async function markCancelled(tx: Transaction, id: string) {
+  return tx.query('UPDATE subscriptions SET status = $1 WHERE id = $2', ['cancelled', id]);
+}
+
+// ===== FILE: src/repositories/invoiceRepository.ts =====
+export async function voidPendingInvoices(subscriptionId: string) {
+  const conn = await pool.connect();
+  try {
+    return await conn.query(
+      'UPDATE invoices SET status = $1 WHERE subscription_id = $2 AND status = $3',
+      ['void', subscriptionId, 'pending'],
+    );
+  } finally {
+    conn.release();
+  }
+}

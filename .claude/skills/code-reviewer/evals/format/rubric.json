@@ -1,0 +1,28 @@
+{
+  "suite": "format",
+  "mode": "structural",
+  "purpose": "Scores whether the reviewer's OUTPUT follows the Output Contract in reference/code-review-checklist.md — not whether the right findings fired. Reuses bespoke/ fixtures rather than carrying its own, since format only needs one case with findings and one without, and bespoke already has both — no need for a third copy of similar code.",
+  "grading_note": "Graded programmatically against the checks below. Each check is pass/fail; a case passes only if all checks pass.",
+  "checks": [
+    { "id": "header_block", "rule": "Lines matching ^Scope:, ^Date:, ^Branch:, ^Ticket:, ^Verdict: all present, in that relative order, before the Summary line." },
+    { "id": "summary_line", "rule": "Exactly one line matching ^Summary: 🔴 \\d+ 🟡 \\d+ 🔵 \\d+$" },
+    { "id": "verdict_matches_counts", "rule": "Verdict is consistent with Summary counts per the Verdict Criteria table: any 🔴 → FAIL; no 🔴 but ≥1 🟡 → PASS WITH WARNINGS; otherwise → PASS." },
+    { "id": "finding_block_shape", "rule": "Every finding block starts with 🔴/🟡/🔵 then 'Rule: <section>/<slug>', followed by 'File: <path>:<line>', 'Issue:' and 'Fix:' lines." },
+    { "id": "rule_id_known", "rule": "Every 'Rule:' value matches a bolded slug under the correspondingly-named section in reference/code-review-checklist.md — no invented rule names — and its severity emoji matches the one tagged on that checklist line." },
+    { "id": "recommendations_section_sane", "rule": "A 'Recommendations' section, if present, contains independent next steps — not padded boilerplate restating the findings, and not present at all when there's nothing beyond the findings." }
+  ],
+  "cases": [
+    {
+      "id": "01-findings-present",
+      "file": "../bespoke/01-silent-failure-violation.txt",
+      "expected_verdict": "STRUCTURAL",
+      "note": "Reuses bespoke's silent-failure violation — a clear single 🔴 → Verdict FAIL. Tests the full contract under a non-trivial finding set."
+    },
+    {
+      "id": "02-clean-no-findings",
+      "file": "../bespoke/03-resource-lifecycle-clean.txt",
+      "expected_verdict": "STRUCTURAL",
+      "note": "Reuses bespoke's resource-lifecycle clean control — expect Summary: 🔴 0 🟡 0 🔵 0 → Verdict PASS. Tests whether the model still emits a well-formed Header/Summary on a zero-finding review, and correctly omits a padded Recommendations section."
+    }
+  ]
+}

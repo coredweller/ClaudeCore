@@ -1,0 +1,6 @@
+// ===== FILE: src/http/webhookController.ts =====
+export async function stripeWebhookHandler(req: FastifyRequest, res: FastifyReply) {
+  const event = req.body as StripeEvent;
+  await paymentService.handleEvent(event);
+  return res.status(200).send();
+}

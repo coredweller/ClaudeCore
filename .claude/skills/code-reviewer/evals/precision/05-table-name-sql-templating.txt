@@ -1,0 +1,17 @@
+// ===== FILE: src/repositories/auditLogRepository.ts =====
+const TABLE_BY_TENANT_TIER = {
+  standard: 'audit_log',
+  enterprise: 'audit_log_enterprise',
+} as const;
+
+export async function insertAuditEntry(
+  db: Pool,
+  tier: keyof typeof TABLE_BY_TENANT_TIER,
+  entry: AuditEntry,
+) {
+  const table = TABLE_BY_TENANT_TIER[tier];
+  return db.query(
+    `INSERT INTO ${table} (actor_id, action, occurred_at) VALUES ($1, $2, $3)`,
+    [entry.actorId, entry.action, entry.occurredAt],
+  );
+}
